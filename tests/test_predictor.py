@@ -22,9 +22,12 @@ def test_predictor_low_risk_prediction(trained_service):
 
     result = trained_service.predict_one(payload)
 
-    assert 0 <= result.probability <= 1
+    assert 0 <= result.default_risk_score <= 1
     assert result.risk_category in {"LOW", "MEDIUM", "HIGH"}
     assert result.thresholds["low"] < result.thresholds["medium"]
+    assert result.loan_decision == "Approved"
+    assert result.approved is True
+    assert "acceptable" in result.reason.lower()
 
     with get_session() as session:
         count = session.query(PredictionLog).count()
@@ -51,6 +54,9 @@ def test_predictor_high_risk_creates_alert(trained_service):
 
     assert result.alert is True
     assert result.risk_category == "HIGH"
+    assert result.loan_decision == "Denied"
+    assert result.approved is False
+    assert "default risk score" in result.reason.lower()
 
     with get_session() as session:
         alert_count = session.query(RiskAlert).count()

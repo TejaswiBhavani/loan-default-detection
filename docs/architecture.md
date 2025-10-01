@@ -16,18 +16,19 @@ Build an AI-driven loan default prediction system that ingests loan application 
    - Training Script: `scripts/train_model.py` orchestrates data loading, preprocessing, training, evaluation, and persistence.
    - Evaluation: Generates metrics report (AUC, F1, confusion matrix) stored in `reports/`.
 
-3. **Prediction Services**
-   - **Flask API (`src/api/app.py`)** exposing endpoints:
-     - `POST /predict`: Accepts applicant features, returns default probability, risk category, and alert flag. Logs requests and responses to the database.
-     - `GET /health`: Basic health check.
-   - Shared utilities in `src/services/predictor.py` for loading the trained pipeline and performing inference.
+3. **Prediction & Lending Decision Services**
+    - **Flask API (`src/api/app.py`)** exposing endpoints:
+       - `POST /predict`: Accepts applicant features, produces a default probability, applies lending rules, and returns the decision, risk score, reason, and alert flag. Logs requests and responses to the database.
+       - `GET /health`: Basic health check.
+    - Prediction pipeline in `src/services/predictor.py` loads the trained model and orchestrates inference.
+    - Lending rules encapsulated in `src/services/decision.py`, currently approving loans when default risk < 20% and debt-to-income ratio < 45%.
 
 4. **Dashboard**
-   - Streamlit app (`streamlit_app.py`) for:
-     - Uploading CSV or manual entry for predictions.
-     - Visualizing distribution of risk categories.
-     - Highlighting high-risk applicants via alerts panel.
-     - Displaying latest predictions from the database when available.
+    - Streamlit app (`streamlit_app.py`) for:
+       - Uploading CSV or manual entry for predictions and decisions.
+       - Visualizing loan decision distribution and underlying risk categories.
+       - Highlighting high-risk applicants via alerts panel.
+       - Displaying latest predictions, decisions, and rationales from the database when available.
 
 5. **Alerting Logic**
    - Risk category thresholds: Low (<0.3), Medium (0.3-0.6), High (>0.6).
@@ -47,7 +48,7 @@ Build an AI-driven loan default prediction system that ingests loan application 
 2. Feature engineering and preprocessing (`src/pipeline/preprocess.py`).
 3. Model training and evaluation (`scripts/train_model.py`).
 4. Model serving through Flask API (`scripts/run_api.py`).
-5. Visualization with Streamlit dashboard (`scripts/run_dashboard.py`).
+5. Lending decision evaluation and visualization with Streamlit dashboard (`scripts/run_dashboard.py`).
 
 ## Future Enhancements
 - Integrate with real-time message queue for streaming risk updates.

@@ -25,9 +25,16 @@ def get_service():
 
 def render_metrics(prediction: PredictionResponse) -> None:
     col1, col2, col3 = st.columns(3)
-    col1.metric("Default Probability", f"{prediction.probability:.2%}")
+    col1.metric("Default Risk Score", f"{prediction.default_risk_score:.2%}")
     col2.metric("Risk Category", prediction.risk_category)
     col3.metric("Alert Triggered", "Yes" if prediction.alert else "No")
+
+    decision_color = "green" if prediction.approved else "red"
+    st.markdown(
+        f"<h3 style='color:{decision_color};margin-top:0;'>Loan Decision: {prediction.loan_decision.upper()}</h3>",
+        unsafe_allow_html=True,
+    )
+    st.info(prediction.reason)
 
 
 def manual_prediction_form() -> None:
@@ -95,11 +102,21 @@ def batch_prediction_uploader() -> None:
         try:
             df = pd.read_csv(uploaded_file)
             predictions = get_service().predict_batch(df.to_dict(orient="records"))
-            results_df = pd.DataFrame([p.model_dump() for p in predictions])
-            results_df["probability"] = results_df["probability"].apply(lambda x: round(x, 4))
+            results_df = pd.DataFrame([
+                {
+                    "Application ID": p.application_id,
+                    "Default Risk Score": round(p.default_risk_score, 4),
+                    "Loan Decision": p.loan_decision,
+                    "Approved": p.approved,
+                    "Reason": p.reason,
+                    "Risk Category": p.risk_category,
+                    "Alert": p.alert,
+                }
+                for p in predictions
+            ])
             st.dataframe(results_df)
 
-            chart = px.histogram(results_df, x="risk_category", title="Risk Category Distribution")
+            chart = px.histogram(results_df, x="Loan Decision", title="Loan Decision Distribution")
             st.plotly_chart(chart, use_container_width=True)
         except ValidationError as error:
             st.error(f"Validation error: {error}")
@@ -137,8 +154,10 @@ def predictions_history() -> None:
             {
                 "Created At": record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "-",
                 "Application ID": record.application_id or record.id,
-                "Probability": round(record.probability, 4),
+                "Default Risk Score": round(record.probability, 4),
                 "Risk Category": record.risk_category,
+                "Loan Decision": (record.features or {}).get("loan_decision", "-"),
+                "Reason": (record.features or {}).get("decision_reason", "-"),
                 "Alert": record.alert_triggered,
             }
             for record in records

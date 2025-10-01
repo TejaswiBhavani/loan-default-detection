@@ -39,12 +39,12 @@ def test_health_endpoint(api_client):
     assert data["status"] == "ok"
 
 
-def test_predict_endpoint_returns_probability(api_client):
+def test_predict_endpoint_returns_decision(api_client):
     response = api_client.post("/predict", json=sample_payload())
     assert response.status_code == 200
     data = response.get_json()
-    assert set(data.keys()) >= {"probability", "risk_category", "alert"}
-    assert 0 <= data["probability"] <= 1
+    assert set(data.keys()) >= {"default_risk_score", "loan_decision", "reason"}
+    assert 0 <= data["default_risk_score"] <= 1
 
 
 def test_batch_prediction_endpoint(api_client):
@@ -54,4 +54,5 @@ def test_batch_prediction_endpoint(api_client):
     data = response.get_json()
     assert isinstance(data, list)
     assert len(data) == 3
-    assert all(0 <= item["probability"] <= 1 for item in data)
+    assert all(0 <= item["default_risk_score"] <= 1 for item in data)
+    assert all("loan_decision" in item for item in data)

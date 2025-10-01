@@ -47,7 +47,18 @@ def create_app(service: PredictorService | None = None) -> Flask:
             logger.exception("Prediction failed")
             return jsonify({"error": str(error)}), 500
 
-        return jsonify(result.model_dump())
+        data = result.model_dump()
+        payload = {
+            "application_id": data["application_id"],
+            "default_risk_score": data["default_risk_score"],
+            "loan_decision": data["loan_decision"],
+            "reason": data["reason"],
+            "approved": data["approved"],
+            "risk_category": data["risk_category"],
+            "alert": data["alert"],
+            "thresholds": data["thresholds"],
+        }
+        return jsonify(payload)
 
     @app.route("/predict/batch", methods=["POST"])
     def predict_batch() -> Any:
@@ -62,7 +73,23 @@ def create_app(service: PredictorService | None = None) -> Flask:
             logger.exception("Batch prediction failed")
             return jsonify({"error": str(error)}), 500
 
-        return jsonify([result.model_dump() for result in results])
+        response_data = []
+        for result in results:
+            data = result.model_dump()
+            response_data.append(
+                {
+                    "application_id": data["application_id"],
+                    "default_risk_score": data["default_risk_score"],
+                    "loan_decision": data["loan_decision"],
+                    "reason": data["reason"],
+                    "approved": data["approved"],
+                    "risk_category": data["risk_category"],
+                    "alert": data["alert"],
+                    "thresholds": data["thresholds"],
+                }
+            )
+
+        return jsonify(response_data)
 
     @app.route("/predictions", methods=["GET"])
     def list_predictions() -> Any:

@@ -9,13 +9,14 @@ from typing import Iterable, List, Optional
 
 import joblib
 import pandas as pd
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from ..db.base import get_session, init_db
 from ..db import crud
 from ..utils.config import AppConfig, get_config
 from ..utils.logger import get_logger
 from ..pipeline.preprocess import CATEGORICAL_FEATURES, NUMERIC_FEATURES
+from .decision import LoanDecision, evaluate_lending_rules
 
 logger = get_logger(__name__)
 
@@ -52,11 +53,16 @@ class LoanApplication(BaseModel):
 
 
 class PredictionResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     application_id: Optional[str]
-    probability: float
+    default_risk_score: float
     risk_category: str
     alert: bool
     thresholds: dict
+    loan_decision: str
+    approved: bool
+    reason: str
 
 
 @dataclass
@@ -118,15 +124,19 @@ class PredictorService:
         df = self._prepare_dataframe([application])
         probability = float(self._pipeline.predict_proba(df)[0][1])
         risk_category, alert = self._categorize_risk(probability)
+        decision = evaluate_lending_rules(probability, application)
 
-        self._log_prediction(application, probability, risk_category, alert)
+        self._log_prediction(application, probability, risk_category, alert, decision)
 
         return PredictionResponse(
             application_id=application.application_id,
-            probability=probability,
+            default_risk_score=probability,
             risk_category=risk_category,
             alert=alert,
             thresholds=self.thresholds,
+            loan_decision=decision.decision,
+            approved=decision.approved,
+            reason=decision.reason,
         )
 
     def predict_batch(self, rows: Iterable[dict]) -> List[PredictionResponse]:
@@ -137,14 +147,18 @@ class PredictorService:
         responses: List[PredictionResponse] = []
         for app, prob in zip(applications, probabilities):
             risk_category, alert = self._categorize_risk(float(prob))
-            self._log_prediction(app, float(prob), risk_category, alert)
+            decision = evaluate_lending_rules(float(prob), app)
+            self._log_prediction(app, float(prob), risk_category, alert, decision)
             responses.append(
                 PredictionResponse(
                     application_id=app.application_id,
-                    probability=float(prob),
+                    default_risk_score=float(prob),
                     risk_category=risk_category,
                     alert=alert,
                     thresholds=self.thresholds,
+                    loan_decision=decision.decision,
+                    approved=decision.approved,
+                    reason=decision.reason,
                 )
             )
         return responses
@@ -155,13 +169,19 @@ class PredictorService:
         probability: float,
         risk_category: str,
         alert: bool,
+        decision: LoanDecision,
     ) -> None:
         try:
             with get_session() as session:
                 prediction = crud.log_prediction(
                     session,
                     application_id=application.application_id,
-                    features=application.model_dump(mode="json"),
+                    features={
+                        **application.model_dump(mode="json"),
+                        "default_risk_score": probability,
+                        "loan_decision": decision.decision,
+                        "decision_reason": decision.reason,
+                    },
                     probability=probability,
                     risk_category=risk_category,
                     alert=alert,

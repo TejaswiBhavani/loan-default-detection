@@ -6,8 +6,8 @@ An end-to-end machine learning system that predicts loan default risk using appl
 
 - **Gradient Boosting classifier** trained on engineered financial features.
 - **Automated preprocessing pipeline** (imputation, scaling, encoding) with persisted artifacts.
-- **Flask prediction API** with batch scoring, risk categorization, and alert logging.
-- **Streamlit dashboard** for manual and batch scoring, alert monitoring, and trend visualization.
+- **Flask prediction API** with two-step risk scoring and lending decisions, plus batch scoring and alert logging.
+- **Streamlit dashboard** for manual/batch scoring, lending decision transparency, alert monitoring, and trend visualization.
 - **SQLAlchemy-backed storage** for prediction logs and high-risk alerts (SQLite by default, PostgreSQL-ready).
 - **Synthetic data generator** to bootstrap experimentation.
 - **Pytest suite** covering predictor logic, API endpoints, and artifact generation.
@@ -57,7 +57,7 @@ python scripts/run_api.py --host 0.0.0.0 --port 8000
 Endpoints:
 
 - `GET /health` – service check
-- `POST /predict` – single applicant scoring
+- `POST /predict` – single applicant scoring + loan decision (returns default risk score, decision, and reason)
 - `POST /predict/batch` – batch scoring
 - `GET /predictions` – recent prediction logs
 - `GET /alerts` – high-risk alerts
@@ -68,7 +68,7 @@ Endpoints:
 python scripts/run_dashboard.py --address 0.0.0.0 --port 8501
 ```
 
-The dashboard supports manual scoring, CSV uploads, risk distribution visualization, and alert monitoring.
+The dashboard supports manual scoring, CSV uploads, decision rationale visualization, and alert monitoring.
 
 ## Configuration
 
