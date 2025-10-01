@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.swp
+.env
+.venv/
+venv/
+.idea/
+.vscode/
+.DS_Store
+logs/*.log
+models/*.joblib
+reports/*.json
+reports/*.csv
+streamlit/*.cache
