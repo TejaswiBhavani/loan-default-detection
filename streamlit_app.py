@@ -1,185 +1,320 @@
-"""Streamlit dashboard for AI-based loan default prediction."""
+"""Streamlit app for loan default prediction using trained ML model."""
 
-from __future__ import annotations
-
-from typing import List
-
-import pandas as pd
-import plotly.express as px
 import streamlit as st
-from pydantic import ValidationError
+import pandas as pd
+import numpy as np
+import joblib
+import json
+import plotly.express as px
+from datetime import datetime
+import warnings
+warnings.filterwarnings('ignore')
 
-from src.db.base import get_session, init_db
-from src.db import crud
-from src.services.predictor import LoanApplication, PredictionResponse, get_predictor_service
-from src.utils.logger import get_logger
+# Load model and preprocessing components
+@st.cache_resource
+def load_model_components():
+    """Load the trained model and preprocessing components."""
+    try:
+        # Load the trained model
+        model = joblib.load("loan_default_model_20251006.joblib")
+        
+        # Load the scaler
+        scaler = joblib.load("scaler_20251006.joblib")
+        
+        # Load feature columns
+        with open("model_columns.json", "r") as f:
+            feature_columns = json.load(f)
+        
+        return model, scaler, feature_columns
+    except Exception as e:
+        st.error(f"Error loading model components: {e}")
+        return None, None, None
 
-logger = get_logger(__name__)
+def predict_default_probability(features_dict, model, scaler, feature_columns):
+    """Make prediction using the trained model."""
+    try:
+        # Create DataFrame with the input features
+        df = pd.DataFrame([features_dict])
+        
+        # Ensure all required columns are present
+        for col in feature_columns:
+            if col not in df.columns:
+                df[col] = 0  # Default value for missing columns
+        
+        # Select only the required columns in the correct order
+        df = df[feature_columns]
+        
+        # Scale the features
+        scaled_features = scaler.transform(df)
+        
+        # Make prediction
+        probability = model.predict_proba(scaled_features)[0, 1]
+        prediction = model.predict(scaled_features)[0]
+        
+        return probability, prediction
+    except Exception as e:
+        st.error(f"Prediction error: {e}")
+        return None, None
 
+def get_risk_category(probability):
+    """Categorize risk based on probability."""
+    if probability < 0.3:
+        return "Low Risk", "green"
+    elif probability < 0.7:
+        return "Medium Risk", "orange"
+    else:
+        return "High Risk", "red"
 
-@st.cache_resource(show_spinner=False)
-def get_service():
-    init_db()
-    return get_predictor_service()
-
-
-def render_metrics(prediction: PredictionResponse) -> None:
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Default Risk Score", f"{prediction.default_risk_score:.2%}")
-    col2.metric("Risk Category", prediction.risk_category)
-    col3.metric("Alert Triggered", "Yes" if prediction.alert else "No")
-
-    decision_color = "green" if prediction.approved else "red"
-    st.markdown(
-        f"<h3 style='color:{decision_color};margin-top:0;'>Loan Decision: {prediction.loan_decision.upper()}</h3>",
-        unsafe_allow_html=True,
+def main():
+    """Main Streamlit application."""
+    st.set_page_config(
+        page_title="Loan Default Predictor", 
+        page_icon="🏦",
+        layout="wide"
     )
-    st.info(prediction.reason)
-
-
-def manual_prediction_form() -> None:
-    st.subheader("Single Applicant Scoring")
-    with st.form("manual_form"):
-        application_id = st.text_input("Application ID", value="APP-0001")
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            loan_amount = st.number_input("Loan Amount", min_value=1000.0, value=15000.0, step=500.0)
-            annual_income = st.number_input("Annual Income", min_value=10000.0, value=60000.0, step=5000.0)
-            credit_score = st.slider("Credit Score", min_value=300, max_value=850, value=680)
-            employment_length = st.slider("Employment Length (years)", min_value=0, max_value=40, value=5)
-        with col_b:
-            interest_rate = st.slider("Interest Rate (%)", min_value=5.0, max_value=35.0, value=13.5, step=0.1)
-            dti = st.slider("Debt-to-Income Ratio", min_value=0.0, max_value=60.0, value=18.0, step=0.5)
-            num_delinquencies = st.number_input("Delinquencies", min_value=0, value=0, step=1)
-            previous_defaults = st.number_input("Previous Defaults", min_value=0, value=0, step=1)
-        with col_c:
-            home_ownership = st.selectbox("Home Ownership", ["RENT", "OWN", "MORTGAGE", "OTHER"])
-            purpose = st.selectbox(
-                "Loan Purpose",
-                [
-                    "debt_consolidation",
-                    "credit_card",
-                    "home_improvement",
-                    "major_purchase",
-                    "small_business",
-                    "car",
-                ],
+    
+    # Load model components
+    model, scaler, feature_columns = load_model_components()
+    
+    if model is None:
+        st.error("Failed to load model. Please check model files.")
+        return
+    
+    # Header
+    st.title("🏦 Loan Default Risk Prediction")
+    st.markdown("**Advanced ML Model for Loan Approval Decision Support**")
+    st.divider()
+    
+    # Sidebar for model info
+    with st.sidebar:
+        st.header("📊 Model Information")
+        st.info(f"**Features Used:** {len(feature_columns)}")
+        st.info("**Model Type:** Ensemble ML Model")
+        st.info("**Training Date:** October 2025")
+        
+        st.header("📋 Required Features")
+        for i, feature in enumerate(feature_columns, 1):
+            st.write(f"{i}. {feature}")
+    
+    # Main prediction form
+    st.header("🎯 Loan Application Assessment")
+    
+    with st.form("prediction_form"):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.subheader("💰 Financial Information")
+            annual_income = st.number_input(
+                "Annual Income ($)", 
+                min_value=10000, 
+                max_value=1000000, 
+                value=60000, 
+                step=1000
             )
-            state = st.selectbox("State", ["CA", "TX", "NY", "FL", "IL", "PA", "OH", "GA", "NC", "MI"])
-
-        submitted = st.form_submit_button("Score Applicant")
-
+            
+            loan_amount = st.number_input(
+                "Loan Amount ($)", 
+                min_value=1000, 
+                max_value=500000, 
+                value=25000, 
+                step=1000
+            )
+            
+            interest_rate = st.slider(
+                "Interest Rate (%)", 
+                min_value=0.01, 
+                max_value=0.30, 
+                value=0.12, 
+                step=0.01,
+                format="%.2f"
+            )
+            
+        with col2:
+            st.subheader("👤 Personal Information")
+            age = st.number_input(
+                "Age", 
+                min_value=18, 
+                max_value=80, 
+                value=35
+            )
+            
+            experience = st.number_input(
+                "Work Experience (years)", 
+                min_value=0, 
+                max_value=50, 
+                value=10
+            )
+            
+            credit_history_length = st.number_input(
+                "Credit History Length (years)", 
+                min_value=0, 
+                max_value=40, 
+                value=8
+            )
+            
+        with col3:
+            st.subheader("🏠 Additional Details")
+            home_ownership = st.selectbox(
+                "Home Ownership Status",
+                ["Own", "Mortgage", "Rent"]
+            )
+            
+            loan_purpose = st.selectbox(
+                "Loan Purpose",
+                ["Home", "Education", "Auto", "Personal", "Debt Consolidation", "Medical"]
+            )
+            
+            # Calculate derived features
+            loan_to_income = loan_amount / annual_income if annual_income > 0 else 0
+            experience_to_age = experience / age if age > 0 else 0
+            
+            st.metric("Loan-to-Income Ratio", f"{loan_to_income:.3f}")
+            st.metric("Experience-to-Age Ratio", f"{experience_to_age:.3f}")
+        
+        # Submit button
+        submitted = st.form_submit_button("🔍 Predict Default Risk", use_container_width=True)
+    
     if submitted:
-        payload = {
-            "application_id": application_id or None,
-            "loan_amount": loan_amount,
-            "interest_rate": interest_rate,
-            "annual_income": annual_income,
-            "credit_score": credit_score,
-            "employment_length": employment_length,
-            "dti": dti,
-            "num_delinquencies": num_delinquencies,
-            "previous_defaults": previous_defaults,
-            "home_ownership": home_ownership,
-            "purpose": purpose,
-            "state": state,
+        # Prepare features for prediction
+        features = {
+            "InterestRate": interest_rate,
+            "AnnualIncome": annual_income,
+            "Experience": experience,
+            "LengthOfCreditHistory": credit_history_length,
+            "LoanPurpose": loan_purpose,
+            "LoanAmount": loan_amount,
+            "HomeOwnershipStatus": home_ownership,
+            "Age": age,
+            "LoanToIncomeRatio": loan_to_income,
+            "ExperienceToAgeRatio": experience_to_age
         }
-        try:
-            prediction = get_service().predict_one(payload)
-            st.success("Prediction generated!")
-            render_metrics(prediction)
-        except ValidationError as error:
-            st.error(f"Validation error: {error}")
-        except Exception as error:
-            st.error(f"Prediction failed: {error}")
-
-
-def batch_prediction_uploader() -> None:
-    st.subheader("Batch Scoring via CSV")
-    st.write("Upload a CSV with the same schema as the training dataset (excluding the target column).")
-    uploaded_file = st.file_uploader("Upload CSV", type="csv")
-    if uploaded_file:
+        
+        # Make prediction
+        probability, prediction = predict_default_probability(features, model, scaler, feature_columns)
+        
+        if probability is not None:
+            st.divider()
+            
+            # Display results
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "Default Probability", 
+                    f"{probability:.1%}",
+                    delta=f"{probability - 0.5:.1%}" if probability != 0.5 else None
+                )
+            
+            with col2:
+                risk_category, color = get_risk_category(probability)
+                st.markdown(f"**Risk Level:** :{color}[{risk_category}]")
+            
+            with col3:
+                decision = "APPROVE" if prediction == 0 else "REJECT"
+                decision_color = "green" if decision == "APPROVE" else "red"
+                st.markdown(f"**Recommendation:** :{decision_color}[{decision}]")
+            
+            with col4:
+                confidence = max(probability, 1 - probability)
+                st.metric("Confidence", f"{confidence:.1%}")
+            
+            # Visual representation
+            st.subheader("📊 Risk Visualization")
+            
+            # Create gauge chart
+            fig = px.pie(
+                values=[probability, 1-probability],
+                names=['Default Risk', 'Safe'],
+                color_discrete_map={'Default Risk': 'red', 'Safe': 'green'},
+                title=f"Default Risk: {probability:.1%}"
+            )
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.subheader("📋 Decision Factors")
+                
+                # Risk factors
+                if loan_to_income > 0.5:
+                    st.warning("⚠️ High loan-to-income ratio")
+                
+                if interest_rate > 0.15:
+                    st.warning("⚠️ High interest rate")
+                
+                if experience_to_age < 0.2:
+                    st.warning("⚠️ Limited work experience")
+                
+                if credit_history_length < 3:
+                    st.warning("⚠️ Short credit history")
+                
+                # Positive factors
+                if loan_to_income < 0.3:
+                    st.success("✅ Reasonable loan amount")
+                
+                if annual_income > 80000:
+                    st.success("✅ High income")
+                
+                if home_ownership in ["Own", "Mortgage"]:
+                    st.success("✅ Property ownership")
+    
+    # Batch prediction section
+    st.divider()
+    st.header("📁 Batch Predictions")
+    
+    uploaded_file = st.file_uploader("Upload CSV file for batch predictions", type="csv")
+    
+    if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
-            predictions = get_service().predict_batch(df.to_dict(orient="records"))
-            results_df = pd.DataFrame([
-                {
-                    "Application ID": p.application_id,
-                    "Default Risk Score": round(p.default_risk_score, 4),
-                    "Loan Decision": p.loan_decision,
-                    "Approved": p.approved,
-                    "Reason": p.reason,
-                    "Risk Category": p.risk_category,
-                    "Alert": p.alert,
-                }
-                for p in predictions
-            ])
-            st.dataframe(results_df)
-
-            chart = px.histogram(results_df, x="Loan Decision", title="Loan Decision Distribution")
-            st.plotly_chart(chart, use_container_width=True)
-        except ValidationError as error:
-            st.error(f"Validation error: {error}")
-        except Exception as error:
-            st.error(f"Batch prediction failed: {error}")
-
-
-def alerts_panel() -> None:
-    st.subheader("Recent High-Risk Alerts")
-    with get_session() as session:
-        alerts = crud.get_recent_alerts(session, limit=20)
-    if not alerts:
-        st.info("No alerts logged yet.")
-        return
-    data = [
-        {
-            "Created At": alert.created_at.strftime("%Y-%m-%d %H:%M") if alert.created_at else "-",
-            "Message": alert.message,
-            "Severity": alert.severity,
-        }
-        for alert in alerts
-    ]
-    st.table(pd.DataFrame(data))
-
-
-def predictions_history() -> None:
-    st.subheader("Latest Predictions")
-    with get_session() as session:
-        records = crud.get_recent_predictions(session, limit=50)
-    if not records:
-        st.info("Make a prediction to populate the dashboard.")
-        return
-    df = pd.DataFrame(
-        [
-            {
-                "Created At": record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "-",
-                "Application ID": record.application_id or record.id,
-                "Default Risk Score": round(record.probability, 4),
-                "Risk Category": record.risk_category,
-                "Loan Decision": (record.features or {}).get("loan_decision", "-"),
-                "Reason": (record.features or {}).get("decision_reason", "-"),
-                "Alert": record.alert_triggered,
-            }
-            for record in records
-        ]
-    )
-    st.dataframe(df)
-
-
-def main() -> None:
-    st.set_page_config(page_title="Loan Default Risk Dashboard", layout="wide")
-    st.title("AI-Based Loan Default Prediction Dashboard")
-    st.caption("Analyze applications, predict default probability, and spot high-risk cases in real time.")
-
-    manual_prediction_form()
-    batch_prediction_uploader()
-
-    col1, col2 = st.columns(2)
-    with col1:
-        alerts_panel()
-    with col2:
-        predictions_history()
-
+            st.write("**Preview of uploaded data:**")
+            st.dataframe(df.head())
+            
+            if st.button("Process Batch Predictions"):
+                predictions_list = []
+                
+                progress_bar = st.progress(0)
+                for i, row in df.iterrows():
+                    # Prepare features (you may need to adjust this based on your CSV structure)
+                    features = {
+                        "InterestRate": row.get("InterestRate", 0.12),
+                        "AnnualIncome": row.get("AnnualIncome", 60000),
+                        "Experience": row.get("Experience", 10),
+                        "LengthOfCreditHistory": row.get("LengthOfCreditHistory", 8),
+                        "LoanPurpose": row.get("LoanPurpose", "Personal"),
+                        "LoanAmount": row.get("LoanAmount", 25000),
+                        "HomeOwnershipStatus": row.get("HomeOwnershipStatus", "Rent"),
+                        "Age": row.get("Age", 35),
+                        "LoanToIncomeRatio": row.get("LoanToIncomeRatio", 0.4),
+                        "ExperienceToAgeRatio": row.get("ExperienceToAgeRatio", 0.3)
+                    }
+                    
+                    probability, prediction = predict_default_probability(features, model, scaler, feature_columns)
+                    
+                    if probability is not None:
+                        risk_category, _ = get_risk_category(probability)
+                        predictions_list.append({
+                            "Row": i + 1,
+                            "Default Probability": f"{probability:.1%}",
+                            "Risk Category": risk_category,
+                            "Decision": "APPROVE" if prediction == 0 else "REJECT"
+                        })
+                    
+                    progress_bar.progress((i + 1) / len(df))
+                
+                # Display results
+                results_df = pd.DataFrame(predictions_list)
+                st.subheader("📊 Batch Prediction Results")
+                st.dataframe(results_df)
+                
+                # Summary statistics
+                approve_count = len([p for p in predictions_list if p["Decision"] == "APPROVE"])
+                st.info(f"**Summary:** {approve_count}/{len(predictions_list)} applications recommended for approval ({approve_count/len(predictions_list)*100:.1f}%)")
+                
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
 
 if __name__ == "__main__":
     main()
