@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # Loan Prediction Frontend
+  loan-frontend:
+    build: .
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - loan-network
+
+  # Optional: Mock Backend API (for demo)
+  loan-api:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./mock-api:/app
+    ports:
+      - "8000:8000"
+    command: ["npm", "start"]
+    environment:
+      - NODE_ENV=production
+      - PORT=8000
+    restart: unless-stopped
+    networks:
+      - loan-network
+
+networks:
+  loan-network:
+    driver: bridge
+
+volumes:
+  api_data:
