@@ -1,0 +1,26 @@
+DROP TYPE IF EXISTS user_role CASCADE;
+DROP TYPE IF EXISTS employment_status CASCADE;
+DROP TYPE IF EXISTS education_level CASCADE;
+DROP TYPE IF EXISTS loan_purpose CASCADE;
+DROP TYPE IF EXISTS home_ownership CASCADE;
+DROP TYPE IF EXISTS application_status CASCADE;
+DROP TYPE IF EXISTS risk_category CASCADE;
+DROP TYPE IF EXISTS prediction_status CASCADE;
+DROP TYPE IF EXISTS audit_action CASCADE;
+
+DROP VIEW IF EXISTS loan_applications_complete CASCADE;
+DROP VIEW IF EXISTS dashboard_metrics CASCADE;
+DROP VIEW IF EXISTS risk_analysis CASCADE;
+
+DROP TABLE IF EXISTS audit_logs CASCADE;
+DROP TABLE IF EXISTS prediction_features CASCADE;
+DROP TABLE IF EXISTS predictions CASCADE;
+DROP TABLE IF EXISTS loan_applications CASCADE;
+DROP TABLE IF EXISTS applicants CASCADE;
+DROP TABLE IF EXISTS user_sessions CASCADE;
+DROP TABLE IF EXISTS model_versions CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
+DROP FUNCTION IF EXISTS calculate_financial_ratios() CASCADE;
+DROP FUNCTION IF EXISTS set_prediction_fields() CASCADE;

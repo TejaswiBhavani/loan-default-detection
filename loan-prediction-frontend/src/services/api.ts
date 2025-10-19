@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import authService from './authService';
 import { 
   APIResponse, 
   PaginatedResponse, 
@@ -11,22 +12,25 @@ import {
   ExportOptions
 } from '../types';
 
+// API Configuration - updated to match backend port
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
 class APIService {
   private api: AxiosInstance;
 
   constructor() {
     this.api = axios.create({
-      baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
+      baseURL: API_BASE_URL,
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
-    // Request interceptor for auth (if needed)
+    // Request interceptor for auth
     this.api.interceptors.request.use(
       (config) => {
-        const token = localStorage.getItem('auth_token');
+        const token = authService.getAccessToken();
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -38,22 +42,19 @@ class APIService {
     // Response interceptor for error handling
     this.api.interceptors.response.use(
       (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          // Handle unauthorized access
-          localStorage.removeItem('auth_token');
-          window.location.href = '/login';
-        }
+      async (error) => {
+        // Don't redirect on 401 here - let authService handle token refresh
+        // Only handle other errors
         return Promise.reject(error);
       }
     );
   }
 
-  // Single prediction
-  async predictSingle(applicantData: Applicant): Promise<APIResponse<PredictionResult>> {
+  // Single prediction - Updated to match backend endpoint
+  async predictSingle(applicantData: any): Promise<APIResponse<PredictionResult>> {
     try {
       const response: AxiosResponse<APIResponse<PredictionResult>> = await this.api.post(
-        '/predict/single',
+        '/predictions',
         applicantData
       );
       return response.data;
@@ -62,14 +63,14 @@ class APIService {
     }
   }
 
-  // Batch prediction upload
+  // Batch prediction upload - Disabled for now (can be implemented if backend supports)
   async uploadBatchFile(file: File): Promise<APIResponse<BatchJob>> {
     try {
       const formData = new FormData();
       formData.append('file', file);
       
       const response: AxiosResponse<APIResponse<BatchJob>> = await this.api.post(
-        '/predict/batch',
+        '/predictions/batch',
         formData,
         {
           headers: {
@@ -84,11 +85,11 @@ class APIService {
     }
   }
 
-  // Get batch job status
+  // Get batch job status - Disabled for now
   async getBatchJobStatus(jobId: string): Promise<APIResponse<BatchJob>> {
     try {
       const response: AxiosResponse<APIResponse<BatchJob>> = await this.api.get(
-        `/batch/${jobId}`
+        `/predictions/batch/${jobId}`
       );
       return response.data;
     } catch (error) {
@@ -115,7 +116,7 @@ class APIService {
     }
   }
 
-  // Get predictions with filters
+  // Get recent predictions
   async getPredictions(
     filters?: FilterOptions,
     page: number = 1,
@@ -123,11 +124,11 @@ class APIService {
   ): Promise<APIResponse<PaginatedResponse<PredictionResult>>> {
     try {
       const response: AxiosResponse<APIResponse<PaginatedResponse<PredictionResult>>> = 
-        await this.api.get('/predictions', {
+        await this.api.get('/predictions/recent', {
           params: {
             ...filters,
             page,
-            per_page: perPage
+            limit: perPage
           }
         });
       return response.data;
@@ -136,7 +137,7 @@ class APIService {
     }
   }
 
-  // Get single prediction
+  // Get single prediction by ID
   async getPrediction(predictionId: string): Promise<APIResponse<PredictionResult>> {
     try {
       const response: AxiosResponse<APIResponse<PredictionResult>> = await this.api.get(
@@ -148,11 +149,23 @@ class APIService {
     }
   }
 
-  // Get model metrics
+  // Get predictions by application ID
+  async getPredictionsByApplication(applicationId: string): Promise<APIResponse<PredictionResult[]>> {
+    try {
+      const response: AxiosResponse<APIResponse<PredictionResult[]>> = await this.api.get(
+        `/predictions/application/${applicationId}`
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Get model metrics - Backend endpoint may differ
   async getModelMetrics(): Promise<APIResponse<ModelMetrics>> {
     try {
       const response: AxiosResponse<APIResponse<ModelMetrics>> = await this.api.get(
-        '/model/metrics'
+        '/dashboard/model-metrics'
       );
       return response.data;
     } catch (error) {
@@ -165,6 +178,111 @@ class APIService {
     try {
       const response: AxiosResponse<APIResponse<DashboardMetrics>> = await this.api.get(
         '/dashboard/metrics'
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Get applicants with pagination and filters
+  async getApplicants(
+    page: number = 1,
+    perPage: number = 20,
+    filters?: any
+  ): Promise<APIResponse<PaginatedResponse<Applicant>>> {
+    try {
+      const response: AxiosResponse<APIResponse<PaginatedResponse<Applicant>>> = 
+        await this.api.get('/applicants', {
+          params: {
+            page,
+            limit: perPage,
+            ...filters
+          }
+        });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Get single applicant
+  async getApplicant(applicantId: string): Promise<APIResponse<Applicant>> {
+    try {
+      const response: AxiosResponse<APIResponse<Applicant>> = await this.api.get(
+        `/applicants/${applicantId}`
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Create new applicant
+  async createApplicant(applicantData: any): Promise<APIResponse<Applicant>> {
+    try {
+      const response: AxiosResponse<APIResponse<Applicant>> = await this.api.post(
+        '/applicants',
+        applicantData
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Update applicant
+  async updateApplicant(applicantId: string, applicantData: any): Promise<APIResponse<Applicant>> {
+    try {
+      const response: AxiosResponse<APIResponse<Applicant>> = await this.api.put(
+        `/applicants/${applicantId}`,
+        applicantData
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Get loan applications
+  async getLoanApplications(
+    page: number = 1,
+    perPage: number = 20,
+    filters?: any
+  ): Promise<APIResponse<PaginatedResponse<any>>> {
+    try {
+      const response: AxiosResponse<APIResponse<PaginatedResponse<any>>> = 
+        await this.api.get('/loan-applications', {
+          params: {
+            page,
+            limit: perPage,
+            ...filters
+          }
+        });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Get single loan application
+  async getLoanApplication(applicationId: string): Promise<APIResponse<any>> {
+    try {
+      const response: AxiosResponse<APIResponse<any>> = await this.api.get(
+        `/loan-applications/${applicationId}`
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Create loan application
+  async createLoanApplication(applicationData: any): Promise<APIResponse<any>> {
+    try {
+      const response: AxiosResponse<APIResponse<any>> = await this.api.post(
+        '/loan-applications',
+        applicationData
       );
       return response.data;
     } catch (error) {
@@ -196,11 +314,12 @@ class APIService {
     }
   }
 
-  // System health check
+  // System health check - Updated to match backend
   async checkSystemHealth(): Promise<APIResponse<any>> {
     try {
-      const response: AxiosResponse<APIResponse<any>> = await this.api.get('/system/status');
-      return response.data;
+      // Backend uses /health endpoint (outside /api prefix)
+      const response = await axios.get(API_BASE_URL.replace('/api', '/health'));
+      return { success: true, data: response.data };
     } catch (error) {
       throw this.handleError(error);
     }

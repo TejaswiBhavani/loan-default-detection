@@ -56,17 +56,63 @@ const Analytics: React.FC = () => {
 
   // Load analytics data
   const loadAnalyticsData = async () => {
-    setState(prev => ({ ...prev, loading: true }));
+    setState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      // For demo purposes, we'll use mock data
-      // In production, uncomment the API calls below:
-      // const [modelResponse, dashboardResponse] = await Promise.all([
-      //   apiService.getModelMetrics(),
-      //   apiService.getDashboardMetrics()
-      // ]);
+      // Import API service dynamically to avoid circular dependencies
+      const apiService = (await import('../services/api')).default;
+      
+      // Fetch real data from backend
+      const [modelResponse, dashboardResponse] = await Promise.all([
+        apiService.getModelMetrics(),
+        apiService.getDashboardMetrics()
+      ]);
 
-      // Mock model metrics
+      if (modelResponse.success && dashboardResponse.success) {
+        // Generate trend data based on time range
+        const days = state.selectedTimeRange === 'week' ? 7 : 
+                     state.selectedTimeRange === 'month' ? 30 : 
+                     state.selectedTimeRange === 'quarter' ? 90 : 365;
+        
+        const mockTrendData: TrendData[] = Array.from({ length: days }, (_, i) => ({
+          date: new Date(Date.now() - (days - 1 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          approvals: Math.floor(Math.random() * 50) + 30,
+          rejections: Math.floor(Math.random() * 20) + 10,
+          reviews: Math.floor(Math.random() * 15) + 5,
+          average_risk: Math.random() * 0.3 + 0.35
+        }));
+
+        // Calculate risk distribution from dashboard metrics
+        const total = dashboardResponse.data?.total_predictions || 1;
+        const approved = dashboardResponse.data?.approved_count || 0;
+        const rejected = dashboardResponse.data?.rejected_count || 0;
+        const pending = dashboardResponse.data?.pending_count || 0;
+        
+        const mockRiskDistribution: RiskDistributionData[] = [
+          { category: 'Low Risk', count: approved, percentage: (approved / total) * 100 },
+          { category: 'Medium Risk', count: pending, percentage: (pending / total) * 100 },
+          { category: 'High Risk', count: rejected, percentage: (rejected / total) * 100 }
+        ];
+
+        setState(prev => ({
+          ...prev,
+          modelMetrics: modelResponse.data || null,
+          dashboardMetrics: dashboardResponse.data || null,
+          trendData: mockTrendData,
+          riskDistribution: mockRiskDistribution,
+          loading: false,
+          lastUpdated: new Date(),
+          error: null
+        }));
+
+        showToast('success', 'Analytics data updated successfully');
+      } else {
+        throw new Error('Failed to load analytics data');
+      }
+    } catch (error: any) {
+      console.error('Analytics load error:', error);
+      
+      // Fallback to mock data if API fails
       const mockModelMetrics: ModelMetrics = {
         accuracy: 0.947,
         precision: 0.923,
@@ -94,47 +140,46 @@ const Analytics: React.FC = () => {
       };
 
       const mockDashboardMetrics: DashboardMetrics = {
-        total_predictions_today: 247,
-        approval_rate_today: 0.682,
-        approval_rate_week: 0.695,
-        average_risk_score: 0.386,
-        high_risk_applications: 23,
-        pending_reviews: 15,
-        system_accuracy: 0.947,
-        recent_predictions: []
+        total_predictions: 247,
+        approved_count: 156,
+        rejected_count: 27,
+        pending_count: 64,
+        approval_rate: 0.632,
+        accuracy: 0.947,
+        precision: 0.923,
+        recall: 0.891,
+        f1_score: 0.906,
+        roc_auc: 0.978
       };
 
-      // if (modelResponse.success && dashboardResponse.success) {
-        // Generate mock trend data
-        const mockTrendData: TrendData[] = Array.from({ length: 30 }, (_, i) => ({
-          date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          approvals: Math.floor(Math.random() * 50) + 30,
-          rejections: Math.floor(Math.random() * 20) + 10,
-          reviews: Math.floor(Math.random() * 15) + 5,
-          average_risk: Math.random() * 0.3 + 0.35
-        }));
+      // Generate mock trend data
+      const mockTrendData: TrendData[] = Array.from({ length: 30 }, (_, i) => ({
+        date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        approvals: Math.floor(Math.random() * 50) + 30,
+        rejections: Math.floor(Math.random() * 20) + 10,
+        reviews: Math.floor(Math.random() * 15) + 5,
+        average_risk: Math.random() * 0.3 + 0.35
+      }));
 
-        // Generate mock risk distribution
-        const mockRiskDistribution: RiskDistributionData[] = [
-          { category: 'Low Risk', count: 156, percentage: 62.4 },
-          { category: 'Medium Risk', count: 67, percentage: 26.8 },
-          { category: 'High Risk', count: 27, percentage: 10.8 }
-        ];
+      // Generate mock risk distribution
+      const mockRiskDistribution: RiskDistributionData[] = [
+        { category: 'Low Risk', count: 156, percentage: 62.4 },
+        { category: 'Medium Risk', count: 67, percentage: 26.8 },
+        { category: 'High Risk', count: 27, percentage: 10.8 }
+      ];
 
-        setState(prev => ({
-          ...prev,
-          modelMetrics: mockModelMetrics,
-          dashboardMetrics: mockDashboardMetrics,
-          trendData: mockTrendData,
-          riskDistribution: mockRiskDistribution,
-          loading: false
-        }));
-      // } else {
-      //   throw new Error('Failed to load analytics data');
-      // }
-    } catch (error) {
-      setState(prev => ({ ...prev, loading: false }));
-      showToast('error', error instanceof Error ? error.message : 'Failed to load analytics data');
+      setState(prev => ({
+        ...prev,
+        modelMetrics: mockModelMetrics,
+        dashboardMetrics: mockDashboardMetrics,
+        trendData: mockTrendData,
+        riskDistribution: mockRiskDistribution,
+        loading: false,
+        error: error.message || 'Failed to load analytics data - using demo data',
+        lastUpdated: new Date()
+      }));
+      
+      showToast('warning', 'Using demo data - API connection failed');
     }
   };
 
