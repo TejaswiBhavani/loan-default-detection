@@ -56,6 +56,8 @@ const applicantsRoutes = require('./routes/applicants');
 const loanApplicationsRoutes = require('./routes/loanApplications');
 const predictionsRoutes = require('./routes/predictions');
 const dashboardRoutes = require('./routes/dashboard');
+const batchRoutes = require('./routes/batch');
+const healthRoutes = require('./routes/health');
 
 // Validate environment variables
 try {
@@ -98,8 +100,13 @@ app.use(cors(getCorsConfig()));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 7. Content-Type validation for POST/PUT/PATCH
+// 7. Content-Type validation for POST/PUT/PATCH (skip for file uploads)
 app.use((req, res, next) => {
+  // Skip validation for batch upload endpoints that need multipart/form-data
+  if (req.path.includes('/batch/upload')) {
+    return next();
+  }
+  
   if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
     return contentTypeValidation(['application/json', 'application/x-www-form-urlencoded'])(req, res, next);
   }
@@ -148,6 +155,23 @@ app.use(requestAudit);
 
 // General rate limiter for all API routes
 app.use('/api/', generalLimiter);
+
+// ============================================================================
+// ROUTES
+// ============================================================================
+
+// Health check endpoint (no rate limit)
+app.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Apply specialized rate limiters to high-risk routes
+app.use('/api/auth', authLimiter);
 
 // ============================================================================
 // PUBLIC ENDPOINTS (No rate limiting)
@@ -212,6 +236,9 @@ app.use('/api/loan-applications', queryLimiter, loanApplicationsRoutes);
 
 // Prediction routes - prediction-specific rate limiting
 app.use('/api/predictions', predictionLimiter, predictionsRoutes);
+
+// Batch processing routes - query rate limiting
+app.use('/api/batch', queryLimiter, batchRoutes);
 
 // Dashboard routes - query rate limiting
 app.use('/api/dashboard', queryLimiter, dashboardRoutes);

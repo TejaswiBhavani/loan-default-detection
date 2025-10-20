@@ -9,6 +9,7 @@ const {
   getPredictionById,
   getPredictionsByApplication,
   getRecentPredictions,
+  exportPredictions,
 } = require('../controllers/predictionsController');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, predictionSchema } = require('../middleware/validation');
@@ -26,6 +27,9 @@ router.post(
 
 // GET /api/predictions/recent - Get recent predictions
 router.get('/recent', getRecentPredictions);
+
+// GET /api/predictions/export - Export predictions
+router.get('/export', exportPredictions);
 
 // GET /api/predictions/application/:applicationId - Get predictions for a specific application
 router.get('/application/:applicationId', getPredictionsByApplication);

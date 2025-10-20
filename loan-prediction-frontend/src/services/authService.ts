@@ -1,7 +1,23 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 // API Configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const getApiBaseUrl = () => {
+  // In browser environments, prefer using the proxy path to avoid CORS
+  // The dev server will proxy /api requests to the backend
+  if (typeof window !== 'undefined') {
+    // Always use /api in browser - the dev proxy or production reverse proxy will handle routing
+    return '/api';
+  }
+  
+  // Fallback for non-browser environments (SSR, tests, etc.)
+  if (process.env.REACT_APP_API_BASE_URL) {
+    return process.env.REACT_APP_API_BASE_URL;
+  }
+  
+  return 'http://localhost:5000/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Token storage keys
 const ACCESS_TOKEN_KEY = 'auth_token';
@@ -10,14 +26,19 @@ const USER_KEY = 'user_data';
 
 export interface User {
   id: string;
+  username: string;
   email: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   role: 'admin' | 'loan_officer' | 'underwriter' | 'analyst' | 'viewer';
-  created_at: string;
+  department: string | null;
+  isActive: boolean;
+  isVerified: boolean;
+  lastLoginAt?: string | null;
 }
 
 export interface LoginCredentials {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -39,24 +60,28 @@ export interface RefreshResponse {
   message?: string;
 }
 
+interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
+
 class AuthService {
   private api: AxiosInstance;
-  private refreshPromise: Promise<string> | null = null;
+  private refreshPromise: Promise<string> | null;
 
   constructor() {
     this.api = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 10000,
       headers: {
         'Content-Type': 'application/json',
       },
     });
+    this.refreshPromise = null;
 
     // Request interceptor to add token
     this.api.interceptors.request.use(
       (config) => {
         const token = this.getAccessToken();
-        if (token) {
+        if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
@@ -67,8 +92,8 @@ class AuthService {
     // Response interceptor for token refresh
     this.api.interceptors.response.use(
       (response) => response,
-      async (error) => {
-        const originalRequest = error.config;
+      async (error: AxiosError) => {
+        const originalRequest = error.config as ExtendedAxiosRequestConfig;
 
         // If error is 401 and we haven't tried to refresh yet
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -77,7 +102,7 @@ class AuthService {
           try {
             const newToken = await this.refreshAccessToken();
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
-            return this.api(originalRequest);
+            return this.api.request(originalRequest);
           } catch (refreshError) {
             // Refresh failed, logout user
             this.logout();
@@ -94,43 +119,48 @@ class AuthService {
   /**
    * Login with email and password
    */
-  async login(credentials: LoginCredentials): Promise<User> {
+  public async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
+      console.log('Login attempt:', {
+        username: credentials.username,
+        hasPassword: !!credentials.password,
+        baseURL: this.api.defaults.baseURL
+      });
+
       const response = await this.api.post<AuthResponse>('/auth/login', credentials);
+
+      console.log('Login response:', {
+        status: response.status,
+        success: response.data.success,
+        hasData: !!response.data.data
+      });
 
       if (response.data.success && response.data.data) {
         const { token, refreshToken, user } = response.data.data;
-        
-        // Store tokens and user data
         this.setAccessToken(token);
         this.setRefreshToken(refreshToken);
         this.setUser(user);
-
-        return user;
-      } else {
-        throw new Error(response.data.message || 'Login failed');
       }
-    } catch (error: any) {
-      const message = error.response?.data?.message || 
-                     error.response?.data?.error ||
-                     error.message ||
-                     'Login failed';
-      throw new Error(message);
+
+      return response.data;
+    } catch (error) {
+      console.error('Login error:', {
+        message: (error as Error).message,
+        response: (error as AxiosError).response?.data
+      });
+      throw error;
     }
   }
 
   /**
    * Logout user
    */
-  async logout(): Promise<void> {
+  public async logout(): Promise<void> {
     try {
-      // Call logout endpoint (optional, for server-side cleanup)
       await this.api.post('/auth/logout');
     } catch (error) {
-      // Continue with logout even if API call fails
-      console.error('Logout API call failed:', error);
+      console.error('Logout error:', error);
     } finally {
-      // Clear all stored data
       this.clearAuthData();
     }
   }
@@ -138,7 +168,7 @@ class AuthService {
   /**
    * Refresh access token using refresh token
    */
-  async refreshAccessToken(): Promise<string> {
+  private async refreshAccessToken(): Promise<string> {
     // Prevent multiple simultaneous refresh requests
     if (this.refreshPromise) {
       return this.refreshPromise;
@@ -181,7 +211,7 @@ class AuthService {
   /**
    * Get current user information
    */
-  async getCurrentUser(): Promise<User> {
+  public async getCurrentUser(): Promise<User> {
     try {
       const response = await this.api.get<AuthResponse>('/auth/me');
       
@@ -203,14 +233,14 @@ class AuthService {
   /**
    * Check if user is authenticated
    */
-  isAuthenticated(): boolean {
+  public isAuthenticated(): boolean {
     return !!this.getAccessToken();
   }
 
   /**
    * Get stored user data
    */
-  getUser(): User | null {
+  public getUser(): User | null {
     try {
       const userStr = localStorage.getItem(USER_KEY);
       return userStr ? JSON.parse(userStr) : null;
@@ -222,7 +252,7 @@ class AuthService {
   /**
    * Get access token
    */
-  getAccessToken(): string | null {
+  public getAccessToken(): string | null {
     return localStorage.getItem(ACCESS_TOKEN_KEY);
   }
 
@@ -266,7 +296,7 @@ class AuthService {
   /**
    * Check user role
    */
-  hasRole(role: string): boolean {
+  public hasRole(role: string): boolean {
     const user = this.getUser();
     return user?.role === role;
   }
@@ -274,7 +304,7 @@ class AuthService {
   /**
    * Check if user has any of the specified roles
    */
-  hasAnyRole(roles: string[]): boolean {
+  public hasAnyRole(roles: string[]): boolean {
     const user = this.getUser();
     return user ? roles.includes(user.role) : false;
   }

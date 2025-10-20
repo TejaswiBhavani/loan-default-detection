@@ -6,6 +6,8 @@
 const axios = require('axios');
 const { query } = require('../config/database');
 const mlPredictionService = require('../services/mlPredictionService');
+const { Parser } = require('json2csv');
+const PDFDocument = require('pdfkit');
 
 /**
  * Create Prediction for Loan Application
@@ -293,9 +295,175 @@ const getRecentPredictions = async (req, res, next) => {
   }
 };
 
+/**
+ * Export Predictions
+ * GET /api/predictions/export
+ */
+const exportPredictions = async (req, res, next) => {
+  try {
+    const { format = 'csv', start_date, end_date, risk_category } = req.query;
+
+    // Build query filters
+    let conditions = [];
+    let params = [];
+    let paramCount = 1;
+
+    if (start_date) {
+      conditions.push(`p.created_at >= $${paramCount}`);
+      params.push(start_date);
+      paramCount++;
+    }
+
+    if (end_date) {
+      conditions.push(`p.created_at <= $${paramCount}`);
+      params.push(end_date);
+      paramCount++;
+    }
+
+    if (risk_category) {
+      conditions.push(`p.risk_category = $${paramCount}`);
+      params.push(risk_category);
+      paramCount++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Fetch predictions with all details
+    const result = await query(
+      `SELECT 
+        p.id,
+        p.created_at,
+        p.risk_score,
+        p.risk_category,
+        p.confidence_score,
+        p.recommendation,
+        p.processing_time_ms,
+        la.loan_amount,
+        la.loan_purpose,
+        la.loan_term_months,
+        la.application_number,
+        a.first_name,
+        a.last_name,
+        a.email,
+        a.annual_income,
+        a.credit_score,
+        a.employment_status,
+        u.username as created_by
+       FROM predictions p
+       JOIN loan_applications la ON p.loan_application_id = la.id
+       JOIN applicants a ON la.applicant_id = a.id
+       LEFT JOIN users u ON p.created_by = u.id
+       ${whereClause}
+       ORDER BY p.created_at DESC
+       LIMIT 1000`,
+      params
+    );
+
+    const predictions = result.rows;
+
+    if (predictions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'No predictions found for the given criteria'
+      });
+    }
+
+    // Export based on format
+    if (format === 'csv') {
+      const fields = [
+        { label: 'ID', value: 'id' },
+        { label: 'Date', value: 'created_at' },
+        { label: 'Application Number', value: 'application_number' },
+        { label: 'Applicant Name', value: (row) => `${row.first_name} ${row.last_name}` },
+        { label: 'Email', value: 'email' },
+        { label: 'Annual Income', value: 'annual_income' },
+        { label: 'Credit Score', value: 'credit_score' },
+        { label: 'Loan Amount', value: 'loan_amount' },
+        { label: 'Loan Purpose', value: 'loan_purpose' },
+        { label: 'Loan Term (months)', value: 'loan_term_months' },
+        { label: 'Risk Score', value: 'risk_score' },
+        { label: 'Risk Category', value: 'risk_category' },
+        { label: 'Confidence', value: 'confidence_score' },
+        { label: 'Recommendation', value: 'recommendation' },
+        { label: 'Processing Time (ms)', value: 'processing_time_ms' },
+        { label: 'Created By', value: 'created_by' }
+      ];
+
+      const parser = new Parser({ fields });
+      const csv = parser.parse(predictions);
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=predictions-${Date.now()}.csv`);
+      res.send(csv);
+
+    } else if (format === 'pdf') {
+      const doc = new PDFDocument({ margin: 50 });
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=predictions-${Date.now()}.pdf`);
+      
+      doc.pipe(res);
+
+      // Title
+      doc.fontSize(20).text('Prediction History Report', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(10).text(`Generated: ${new Date().toISOString()}`, { align: 'center' });
+      doc.fontSize(10).text(`Total Predictions: ${predictions.length}`, { align: 'center' });
+      doc.moveDown(2);
+
+      // Summary statistics
+      const lowRisk = predictions.filter(p => p.risk_category === 'low').length;
+      const mediumRisk = predictions.filter(p => p.risk_category === 'medium').length;
+      const highRisk = predictions.filter(p => p.risk_category === 'high').length;
+
+      doc.fontSize(14).text('Summary', { underline: true });
+      doc.fontSize(10);
+      doc.text(`Low Risk: ${lowRisk} (${((lowRisk/predictions.length)*100).toFixed(1)}%)`);
+      doc.text(`Medium Risk: ${mediumRisk} (${((mediumRisk/predictions.length)*100).toFixed(1)}%)`);
+      doc.text(`High Risk: ${highRisk} (${((highRisk/predictions.length)*100).toFixed(1)}%)`);
+      doc.moveDown(2);
+
+      // Table header
+      doc.fontSize(12).text('Recent Predictions', { underline: true });
+      doc.moveDown();
+
+      // Predictions list (first 50)
+      predictions.slice(0, 50).forEach((pred, index) => {
+        if (doc.y > 700) {
+          doc.addPage();
+        }
+        
+        doc.fontSize(9);
+        doc.text(`${index + 1}. ${pred.first_name} ${pred.last_name} - ${pred.application_number}`);
+        doc.fontSize(8);
+        doc.text(`   Risk: ${pred.risk_category.toUpperCase()} (${(parseFloat(pred.risk_score) * 100).toFixed(1)}%) | Recommendation: ${pred.recommendation.toUpperCase()}`);
+        doc.text(`   Loan: $${parseFloat(pred.loan_amount).toLocaleString()} for ${pred.loan_purpose} | Date: ${new Date(pred.created_at).toLocaleDateString()}`);
+        doc.moveDown(0.5);
+      });
+
+      if (predictions.length > 50) {
+        doc.moveDown();
+        doc.fontSize(9).text(`... and ${predictions.length - 50} more predictions`, { align: 'center', color: 'gray' });
+      }
+
+      doc.end();
+
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Unsupported format. Use csv or pdf.'
+      });
+    }
+
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createPrediction,
   getPredictionById,
   getPredictionsByApplication,
   getRecentPredictions,
+  exportPredictions,
 };

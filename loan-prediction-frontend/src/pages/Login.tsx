@@ -15,7 +15,7 @@ const Login: React.FC = () => {
   const { login, isLoading } = useAuth();
 
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: '',
   });
   const [error, setError] = useState<string>('');
@@ -27,11 +27,11 @@ const Login: React.FC = () => {
   const validateForm = (): boolean => {
     const errors: { [key: string]: string } = {};
 
-    // Email validation
-    if (!formData.email) {
-      errors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = 'Please enter a valid email address';
+    // Username validation
+    if (!formData.username) {
+      errors.username = 'Username is required';
+    } else if (formData.username.length < 3) {
+      errors.username = 'Username must be at least 3 characters';
     }
 
     // Password validation
@@ -56,7 +56,7 @@ const Login: React.FC = () => {
 
     try {
       await login({
-        email: formData.email,
+        username: formData.username,
         password: formData.password,
       });
 
@@ -139,25 +139,25 @@ const Login: React.FC = () => {
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                Username
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
                 required
-                value={formData.email}
+                value={formData.username}
                 onChange={handleChange}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                  fieldErrors.email ? 'border-red-300' : 'border-gray-300'
+                  fieldErrors.username ? 'border-red-300' : 'border-gray-300'
                 } placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
-                placeholder="your.email@example.com"
+                placeholder="admin"
                 disabled={isLoading}
               />
-              {fieldErrors.email && (
-                <p className="mt-1 text-sm text-red-600">{fieldErrors.email}</p>
+              {fieldErrors.username && (
+                <p className="mt-1 text-sm text-red-600">{fieldErrors.username}</p>
               )}
             </div>
 
@@ -251,7 +251,7 @@ const Login: React.FC = () => {
             <p className="text-sm text-gray-600">
               Demo credentials:{' '}
               <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
-                admin@example.com / admin123
+                admin / admin123
               </span>
             </p>
           </div>

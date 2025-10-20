@@ -208,3 +208,268 @@ export interface Notification {
   read: boolean;
   auto_dismiss?: boolean;
 }
+
+// ============================================
+// NEW COMPREHENSIVE TYPES FOR SMART DASHBOARD
+// ============================================
+
+// Applicant Profile
+export interface ApplicantProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  applicationSource: 'online_portal' | 'branch' | 'phone' | 'broker' | 'crm';
+  applicationDate: Date;
+  employmentStatus: 'employed' | 'self-employed' | 'unemployed' | 'retired' | 'student';
+  employerName?: string;
+  employmentLength: number; // years
+  dependents: number;
+}
+
+// Financial Snapshot
+export interface FinancialSnapshot {
+  annualIncome: number;
+  incomeVerification: 'w2' | 'tax_return' | 'paystub' | 'bank_statement' | 'unverified';
+  currentDebt: number;
+  debtToIncomeRatio: number;
+  creditScore: number;
+  creditScoreSource: 'experian' | 'equifax' | 'transunion' | 'average';
+  creditHistoryLength: number; // years
+  housingPayment: number;
+  otherMonthlyPayments: number;
+  assets: {
+    checking: number;
+    savings: number;
+    investments: number;
+    realEstate: number;
+  };
+  totalAssets: number;
+  recentCreditInquiries: number;
+  openAccounts: number;
+  paymentHistoryScore: number; // 0-100
+}
+
+// Loan Terms
+export interface LoanTerms {
+  id: string;
+  loanAmount: number;
+  purpose: 'home_improvement' | 'auto' | 'personal' | 'business' | 'debt_consolidation' | 'education' | 'other';
+  term: number; // months
+  estimatedInterestRate: number; // percentage
+  previousLoans: {
+    type: string;
+    amount: number;
+    status: 'paid' | 'current' | 'defaulted' | 'delinquent';
+  }[];
+  collateral?: {
+    type: string;
+    estimatedValue: number;
+  };
+  loanToValueRatio?: number;
+}
+
+// Decision Factor for AI Analysis
+export interface DecisionFactor {
+  category: 'strength' | 'consideration' | 'risk';
+  title: string;
+  description: string;
+  impact: number; // 0-1, weight of this factor
+  data_point?: string; // reference to actual data
+}
+
+// Comparable Case
+export interface CaseComparison {
+  similarProfiles: number;
+  defaultRate: number;
+  approvalRate: number;
+  officerApprovalRate: number;
+  departmentApprovalRate: number;
+}
+
+// AI Analysis
+export interface AIAnalysis {
+  riskScore: number; // 0-100
+  riskCategory: 'low' | 'medium' | 'high' | 'critical';
+  confidence: number; // 0-100 (%)
+  recommendation: 'APPROVE' | 'REVIEW' | 'DENY';
+  keyFactors: DecisionFactor[];
+  comparableCases: CaseComparison;
+  modelVersion: string;
+  analysisTimestamp: Date;
+  explanation: string; // Human-readable explanation
+}
+
+// Officer Decision
+export interface OfficerDecision {
+  decision: 'APPROVED' | 'DENIED' | 'PENDING' | 'DRAFT';
+  overrideReason?: string;
+  notes: string;
+  timestamp: Date;
+  officerId: string;
+  officerName: string;
+  agreedWithAI: boolean;
+}
+
+// Workflow Status
+export interface WorkflowStatus {
+  status: 'new' | 'review' | 'approved' | 'denied' | 'escalated';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  slaDeadline: Date;
+  assignedOfficer: string;
+  escalatedTo?: string;
+  createdAt: Date;
+  lastModified: Date;
+}
+
+// Complete Loan Application
+export interface LoanApplication {
+  id: string;
+  applicant: ApplicantProfile;
+  financials: FinancialSnapshot;
+  loanDetails: LoanTerms;
+  aiAnalysis: AIAnalysis;
+  officerDecision?: OfficerDecision;
+  workflow: WorkflowStatus;
+  documents?: {
+    type: string;
+    url: string;
+    uploadDate: Date;
+    verified: boolean;
+  }[];
+  auditTrail?: {
+    action: string;
+    actor: string;
+    timestamp: Date;
+    details: string;
+  }[];
+}
+
+// Dashboard Metrics (Enhanced)
+export interface EnhancedDashboardMetrics {
+  active: number;
+  pendingReview: number;
+  urgent: number;
+  todayProcessed: number;
+  todayTotal: number;
+  myApprovalRate: number;
+  aiAgreementRate: number;
+  myDefaultRate: number;
+  teamDefaultRate: number;
+  avgProcessingTime: number; // minutes
+  teamAvgProcessingTime: number; // minutes
+  overrideRate: number;
+  overrideSuccessRate: number;
+}
+
+// Alert
+export interface Alert {
+  id: string;
+  type: 'deadline' | 'escalation' | 'pattern' | 'system';
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  message: string;
+  applicationId?: string;
+  actionUrl?: string;
+  timestamp: Date;
+  acknowledged: boolean;
+}
+
+// Batch Processing
+export interface BatchProcessingJob {
+  id: string;
+  fileName: string;
+  uploadDate: Date;
+  status: 'validating' | 'processing' | 'completed' | 'failed';
+  totalRecords: number;
+  readyForProcessing: number;
+  requiresDocumentation: number;
+  missingData: number;
+  results?: BatchProcessingResult[];
+  smartFilters?: SmartFilterConfig;
+}
+
+export interface SmartFilterConfig {
+  autoApprove: {
+    enabled: boolean;
+    maxRisk: number;
+    maxAmount: number;
+    maxDTI: number;
+  };
+  flagForReview: {
+    enabled: boolean;
+    minRisk: number;
+    maxRisk: number;
+    minExperience: number;
+  };
+  escalateRequired: {
+    enabled: boolean;
+    minRisk: number;
+    minAmount: number;
+  };
+  highlights: {
+    recentAddressChange: boolean;
+    multipleInquiries: boolean;
+    firstTimeApplicant: boolean;
+  };
+}
+
+export interface BatchProcessingResult {
+  applicationId: string;
+  applicantName: string;
+  loanAmount: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  riskScore: number;
+  aiRecommendation: 'approve' | 'review' | 'deny';
+  smartTags: string[];
+  action: 'auto_approved' | 'flagged' | 'escalated' | 'pending';
+}
+
+// Officer Performance Metrics
+export interface OfficerPerformance {
+  decisionAccuracy: number; // %
+  overrideCount: number;
+  overrideSuccessRate: number; // %
+  avgProcessingTime: number; // minutes
+  totalDecisions: number;
+  approvalRate: number; // %
+  defaultRate: number; // %
+  strongAreas: string[];
+  comparisonToTeam: {
+    moreApprovalsPercentage: number;
+    accuracyDifference: number;
+    processingTimeComparison: number; // seconds difference
+  };
+}
+
+// Risk Pattern
+export interface RiskPattern {
+  pattern: string;
+  affectedCount: number;
+  defaultRateVariation: number; // percentage change
+  description: string;
+  relevance: 'high' | 'medium' | 'low';
+}
+
+// Prediction Trend
+export interface PredictionTrend {
+  category: string;
+  direction: 'up' | 'down' | 'stable';
+  percentageChange: number;
+  description: string;
+}
+
+// Mobile Swipe Card
+export interface SwipeCard {
+  application: LoanApplication;
+  displayName: string;
+  displayLoanAmount: string;
+  displayRisk: string;
+  recommendation: string;
+  quickFacts: string[];
+}

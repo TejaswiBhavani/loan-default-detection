@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AppContext';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useAuth } from '../../contexts/AppContext';
+import LoadingSpinner from './LoadingSpinner';
 
 interface PrivateRouteProps {
   children: React.ReactElement;

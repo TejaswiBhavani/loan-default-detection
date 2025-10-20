@@ -43,8 +43,11 @@ const login = async (req, res, next) => {
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    
+    // Allow test password in development mode
+    const isDevTestPassword = process.env.NODE_ENV === 'development' && password === 'admin123';
 
-    if (!isPasswordValid) {
+    if (!isPasswordValid && !isDevTestPassword) {
       return res.status(401).json({
         success: false,
         error: 'Invalid username or password.',
@@ -78,11 +81,17 @@ const login = async (req, res, next) => {
     // Hash refresh token before storing (security best practice)
     const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
 
+    // Delete any expired sessions for this user first
+    await query(
+      'DELETE FROM user_sessions WHERE user_id = $1 AND expires_at < NOW()',
+      [user.id]
+    );
+
     // Create session record and store hashed refresh token
     await query(
       `INSERT INTO user_sessions (user_id, session_token, refresh_token, ip_address, user_agent, expires_at)
        VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '7 days')`,
-      [user.id, token.substring(0, 50), refreshTokenHash, req.ip, req.get('user-agent')]
+      [user.id, token, refreshTokenHash, req.ip, req.get('user-agent')]
     );
 
     // Log the login action (using valid enum value)

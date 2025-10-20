@@ -1,0 +1,4 @@
+first_name,last_name,email,phone,annual_income,credit_score,loan_amount,loan_purpose,loan_term_months,address,city,state,zip_code
+Alice,Smith,alice@example.com,555-0001,60000,720,15000,debt_consolidation,36,123 Main St,Boston,MA,02101
+Bob,Johnson,bob@example.com,555-0002,75000,680,25000,home_improvement,48,456 Oak Ave,Austin,TX,73301
+Carol,Williams,carol@example.com,555-0003,55000,750,10000,car_purchase,24,789 Pine Rd,Seattle,WA,98101

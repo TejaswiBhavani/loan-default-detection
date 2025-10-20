@@ -28,6 +28,7 @@ interface PredictionHistoryState {
   selectedPrediction: PredictionResult | null;
   showDetailModal: boolean;
   showFilters: boolean;
+  showExportMenu: boolean;
 }
 
 const PredictionHistory: React.FC = () => {
@@ -42,7 +43,8 @@ const PredictionHistory: React.FC = () => {
     pageSize: 20,
     selectedPrediction: null,
     showDetailModal: false,
-    showFilters: false
+    showFilters: false,
+    showExportMenu: false
   });
 
   const [toast, setToast] = useState<{show: boolean; type: 'success' | 'error' | 'warning'; message: string}>({
@@ -73,17 +75,21 @@ const PredictionHistory: React.FC = () => {
       if (response.success && response.data) {
         setState(prev => ({
           ...prev,
-          predictions: response.data!.data,
-          currentPage: response.data!.page,
-          totalPages: response.data!.total_pages,
-          totalItems: response.data!.total,
+          predictions: response.data?.data || [],
+          currentPage: response.data?.page || 1,
+          totalPages: response.data?.total_pages || 1,
+          totalItems: response.data?.total || 0,
           loading: false
         }));
       } else {
         throw new Error(response.message || 'Failed to load predictions');
       }
     } catch (error) {
-      setState(prev => ({ ...prev, loading: false }));
+      setState(prev => ({ 
+        ...prev, 
+        loading: false,
+        predictions: [] // Ensure predictions is always an array
+      }));
       showToast('error', error instanceof Error ? error.message : 'Failed to load predictions');
     }
   };
@@ -158,14 +164,17 @@ const PredictionHistory: React.FC = () => {
   };
 
   // Filter predictions based on search term
-  const filteredPredictions = state.predictions.filter(prediction => {
+  const filteredPredictions = (state.predictions || []).filter(prediction => {
     if (!state.searchTerm) return true;
     const searchLower = state.searchTerm.toLowerCase();
+    const pred = prediction as any; // Cast to access additional fields
     return (
-      prediction.id.toLowerCase().includes(searchLower) ||
-      prediction.applicant_id.toLowerCase().includes(searchLower) ||
-      prediction.risk_category.toLowerCase().includes(searchLower) ||
-      prediction.recommendation.toLowerCase().includes(searchLower)
+      prediction.id?.toLowerCase().includes(searchLower) ||
+      prediction.applicant_id?.toLowerCase().includes(searchLower) ||
+      prediction.risk_category?.toLowerCase().includes(searchLower) ||
+      prediction.recommendation?.toLowerCase().includes(searchLower) ||
+      pred.applicant_name?.toLowerCase().includes(searchLower) ||
+      pred.application_number?.toLowerCase().includes(searchLower)
     );
   });
 
@@ -218,12 +227,36 @@ const PredictionHistory: React.FC = () => {
           </button>
           <div className="relative">
             <button
+              onClick={() => setState(prev => ({ ...prev, showExportMenu: !prev.showExportMenu }))}
               className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
             >
               <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
               Export
             </button>
-            {/* Export dropdown would go here */}
+            {state.showExportMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      exportData('csv');
+                      setState(prev => ({ ...prev, showExportMenu: false }));
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Export as CSV
+                  </button>
+                  <button
+                    onClick={() => {
+                      exportData('pdf');
+                      setState(prev => ({ ...prev, showExportMenu: false }));
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Export as PDF
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -411,14 +444,19 @@ const PredictionHistory: React.FC = () => {
                         {formatDateTime(prediction.created_at)}
                       </div>
                       <div className="text-xs text-gray-500 font-mono">
-                        {prediction.id.slice(0, 8)}...
+                        {prediction.id?.slice(0, 8) || 'N/A'}...
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <UserIcon className="h-4 w-4 text-gray-400 mr-2" />
-                        <div className="text-sm text-gray-900 font-mono">
-                          {prediction.applicant_id.slice(0, 8)}...
+                        <div>
+                          <div className="text-sm text-gray-900">
+                            {(prediction as any).applicant_name || 'Unknown'}
+                          </div>
+                          <div className="text-xs text-gray-500 font-mono">
+                            {(prediction as any).application_number || prediction.applicant_id?.slice(0, 8) || 'N/A'}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -590,7 +628,7 @@ const PredictionHistory: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-3">Feature Importance</h3>
                   <div className="space-y-2">
-                    {state.selectedPrediction.feature_importance.slice(0, 10).map((feature, index) => (
+                    {(state.selectedPrediction.feature_importance || []).slice(0, 10).map((feature, index) => (
                       <div key={index} className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">

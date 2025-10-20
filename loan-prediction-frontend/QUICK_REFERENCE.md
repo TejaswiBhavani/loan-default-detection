@@ -1,6 +1,48 @@
-# Quick Reference - Frontend Integration
+# Quick Reference - Frontend Integration & Components
 
-## 🚀 Quick Start
+## 🚀 Quick Start - New Dashboard Components
+
+### Import Components
+```tsx
+import { SmartDashboard } from './components/dashboard/SmartDashboard';
+import { ApplicationWorkflow } from './components/workflow/ApplicationWorkflow';
+import { AIAnalysisPanel } from './components/analysis/AIAnalysisPanel';
+import { BatchProcessor } from './components/batch/BatchProcessor';
+import { DecisionAnalytics } from './components/analytics/DecisionAnalytics';
+import { MobileSwipeInterface } from './components/mobile/MobileSwipeInterface';
+```
+
+### Import Hooks
+```tsx
+import {
+  useLoanDashboard,
+  useApplicationFilter,
+  useAnalytics,
+  useApplicationDecision,
+  useBatchProcessing,
+  useAlerts,
+} from './hooks/useLoanDashboard';
+```
+
+### Dashboard Example
+```tsx
+const DashboardPage = () => {
+  const { applications, metrics, alerts, loading } = useLoanDashboard();
+  
+  return (
+    <SmartDashboard
+      metrics={metrics}
+      alerts={alerts}
+      recentApplications={applications}
+      loading={loading}
+    />
+  );
+};
+```
+
+---
+
+## 🚀 Original Quick Start
 
 ### 1. Start Backend (Terminal 1)
 ```bash

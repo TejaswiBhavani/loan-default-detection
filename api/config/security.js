@@ -77,43 +77,42 @@ const helmetConfig = {
  * Configure Cross-Origin Resource Sharing
  */
 const getCorsConfig = () => {
-  const allowedOrigins = process.env.CORS_ORIGIN 
-    ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-    : ['http://localhost:3000', 'http://localhost:3001'];
-  
+  const allowedOrigins = [
+    // Development
+    'https://probable-space-broccoli-jj456v5xx4p4c5x9j-3000.app.github.dev',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    
+    // Production (replace with actual domains)
+    process.env.FRONTEND_URL,
+    'https://app.loanpredict.com'
+  ].filter(Boolean); // Remove undefined values
+
   return {
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman, etc.)
-      if (!origin) return callback(null, true);
-      
-      // In development, allow all origins
+      // Allow requests with no origin (like mobile apps, curl, or same-origin via proxy)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // In development, be more permissive
       if (process.env.NODE_ENV === 'development') {
         return callback(null, true);
       }
-      
-      // In production, check against whitelist
-      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Requested-With',
-      'X-Request-ID',
-    ],
-    exposedHeaders: [
-      'X-Request-ID',
-      'X-RateLimit-Limit',
-      'X-RateLimit-Remaining',
-      'X-RateLimit-Reset',
-    ],
-    maxAge: 86400, // 24 hours
-    optionsSuccessStatus: 200,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range', 'X-Total-Count'],
+    maxAge: 600, // 10 minutes
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   };
 };
 
