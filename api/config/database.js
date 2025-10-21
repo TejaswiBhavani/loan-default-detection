@@ -7,16 +7,27 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 // Create a connection pool
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || 'loan_db',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  max: parseInt(process.env.DB_MAX_CLIENTS) || 20,
-  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
-  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 2000,
-});
+// Use DATABASE_URL for Railway deployment or individual params for local dev
+const pool = new Pool(
+  process.env.DATABASE_URL 
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+        max: parseInt(process.env.DB_MAX_CLIENTS) || 20,
+        idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
+        connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 2000,
+      }
+    : {
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT) || 5432,
+        database: process.env.DB_NAME || 'loan_db',
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || 'postgres',
+        max: parseInt(process.env.DB_MAX_CLIENTS) || 20,
+        idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
+        connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 2000,
+      }
+);
 
 // Event handlers
 pool.on('connect', () => {

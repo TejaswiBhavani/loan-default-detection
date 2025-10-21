@@ -9,25 +9,37 @@ require('dotenv').config();
  * Validate required environment variables
  */
 const validateEnv = () => {
+  // For Railway deployment, DATABASE_URL is sufficient
+  // For local development, individual DB variables are needed
+  const isDatabaseUrlPresent = !!process.env.DATABASE_URL;
+  
   const required = [
-    'DB_HOST',
-    'DB_PORT',
-    'DB_NAME',
-    'DB_USER',
-    'DB_PASSWORD',
     'JWT_SECRET',
-    'JWT_REFRESH_SECRET',
+    'REFRESH_TOKEN_SECRET', // Updated from JWT_REFRESH_SECRET to match your code
   ];
+  
+  // Add individual DB variables only if DATABASE_URL is not present
+  if (!isDatabaseUrlPresent) {
+    required.push('DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD');
+  }
   
   const missing = required.filter(key => !process.env[key]);
   
   if (missing.length > 0) {
     console.error('❌ Missing required environment variables:');
     missing.forEach(key => console.error(`   - ${key}`));
+    if (!isDatabaseUrlPresent) {
+      console.error('💡 Tip: Set DATABASE_URL or individual DB_* variables');
+    }
     throw new Error('Missing required environment variables');
   }
   
   console.log('✅ All required environment variables are set');
+  if (isDatabaseUrlPresent) {
+    console.log('✅ Using DATABASE_URL for database connection');
+  } else {
+    console.log('✅ Using individual database environment variables');
+  }
 };
 
 /**
