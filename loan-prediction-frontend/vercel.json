@@ -1,11 +1,12 @@
 {
-  "buildCommand": "npm run build:prod",
+  "buildCommand": "npm run build",
   "outputDirectory": "build",
-  "installCommand": "npm ci",
+  "installCommand": "npm install",
   "framework": "create-react-app",
   "nodeVersion": "18.x",
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "REACT_APP_API_URL": "@api_url"
   },
   "rewrites": [
     {
