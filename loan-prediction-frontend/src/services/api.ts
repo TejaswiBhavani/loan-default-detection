@@ -66,9 +66,13 @@ class APIService {
   // Batch prediction upload
   async uploadBatchFile(file: File): Promise<APIResponse<BatchJob>> {
     try {
+      console.log('🔧 API Service: Starting batch file upload');
+      console.log('   File:', file.name, 'Size:', file.size, 'Type:', file.type);
+      
       const formData = new FormData();
       formData.append('file', file);
       
+      console.log('📡 Making POST request to /batch/upload');
       const response: AxiosResponse<APIResponse<BatchJob>> = await this.api.post(
         '/batch/upload',
         formData,
@@ -79,8 +83,13 @@ class APIService {
           timeout: 60000, // Extended timeout for file uploads
         }
       );
+      
+      console.log('📨 Response received:', response.status, response.statusText);
+      console.log('📨 Response data:', response.data);
+      
       return response.data;
     } catch (error) {
+      console.error('❌ API Service upload error:', error);
       throw this.handleError(error);
     }
   }
@@ -111,6 +120,19 @@ class APIService {
         }
       );
       return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Export batch results (csv/xlsx/pdf) - returns blob for download
+  async exportBatchResults(jobId: string, format: string = 'csv'): Promise<Blob> {
+    try {
+      const response = await this.api.get(`/batch/${jobId}/export`, {
+        params: { format },
+        responseType: 'blob'
+      });
+      return response.data as Blob;
     } catch (error) {
       throw this.handleError(error);
     }

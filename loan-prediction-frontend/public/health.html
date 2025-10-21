@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Health Check</title>
+</head>
+<body>
+    <h1>React App is Running</h1>
+    <p>Current URL: <span id="url"></span></p>
+    <p>Time: <span id="time"></span></p>
+    
+    <h2>Test API Connection</h2>
+    <button onclick="testAPI()">Test API Health</button>
+    <div id="apiResult"></div>
+    
+    <script>
+        document.getElementById('url').textContent = window.location.href;
+        document.getElementById('time').textContent = new Date().toISOString();
+        
+        async function testAPI() {
+            const resultDiv = document.getElementById('apiResult');
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                resultDiv.innerHTML = `<p style="color: green;">API Health: ${JSON.stringify(data)}</p>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">API Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

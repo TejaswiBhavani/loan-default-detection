@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSV Upload Test</title>
+</head>
+<body>
+    <h1>Direct CSV Upload Test</h1>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" id="csvFile" accept=".csv" required>
+        <button type="submit">Upload CSV</button>
+    </form>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('csvFile');
+            const resultDiv = document.getElementById('result');
+            
+            if (!fileInput.files[0]) {
+                resultDiv.innerHTML = '<p style="color: red;">Please select a file</p>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p>Uploading...</p>';
+            
+            try {
+                // First login
+                const loginResponse = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                });
+                
+                const loginData = await loginResponse.json();
+                
+                if (!loginData.success) {
+                    throw new Error('Login failed: ' + loginData.error);
+                }
+                
+                // Then upload file
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                
+                const uploadResponse = await fetch('/api/batch/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + loginData.data.token
+                    },
+                    body: formData
+                });
+                
+                const uploadData = await uploadResponse.json();
+                
+                if (uploadData.success) {
+                    resultDiv.innerHTML = `
+                        <p style="color: green;">✅ Upload successful!</p>
+                        <p>Job ID: ${uploadData.data.id}</p>
+                        <p>Filename: ${uploadData.data.filename}</p>
+                        <p>Status: ${uploadData.data.status}</p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">❌ Upload failed: ${uploadData.error}</p>`;
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+                console.error('Upload error:', error);
+            }
+        });
+    </script>
+</body>
+</html>

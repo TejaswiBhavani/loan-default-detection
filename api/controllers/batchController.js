@@ -378,3 +378,93 @@ module.exports = {
   getBatchJobStatus,
   getUserBatchJobs
 };
+
+/**
+ * Export batch results as CSV
+ * GET /api/batch/:jobId/export?format=csv
+ */
+const exportBatchResults = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { format = 'csv' } = req.query;
+
+    // Verify job belongs to user
+    const jobRes = await query('SELECT id, filename FROM batch_jobs WHERE id = $1 AND user_id = $2', [jobId, req.user.id]);
+    if (jobRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Batch job not found' });
+    }
+
+    // Fetch predictions / results for this job
+    const resultsRes = await query(
+      `SELECT p.loan_application_id, p.risk_score, p.risk_category, p.recommendation, p.created_at, la.id as loan_application_id, a.first_name, a.last_name, a.email
+       FROM predictions p
+       JOIN loan_applications la ON p.loan_application_id = la.id
+       JOIN applicants a ON la.applicant_id = a.id
+       WHERE p.created_by = $1 AND p.created_at >= (SELECT created_at FROM batch_jobs WHERE id = $2) - interval '1 day'`,
+      [req.user.id, jobId]
+    );
+
+    const rows = resultsRes.rows;
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'No results to export for this job' });
+    }
+
+    // Only CSV implemented for now
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="batch_${jobId}_results_${Date.now()}.csv"`);
+
+      // Write CSV header
+      res.write('loan_application_id,first_name,last_name,email,risk_score,risk_category,recommendation,created_at\n');
+
+      for (const r of rows) {
+        const line = [
+          r.loan_application_id,
+          `"${(r.first_name || '').replace(/"/g, '""')}"`,
+          `"${(r.last_name || '').replace(/"/g, '""')}"`,
+          `"${(r.email || '').replace(/"/g, '""')}"`,
+          r.risk_score != null ? r.risk_score : '',
+          r.risk_category || '',
+          r.recommendation || '',
+          r.created_at
+        ].join(',') + '\n';
+
+        res.write(line);
+      }
+
+      return res.end();
+    }
+
+    return res.status(400).json({ success: false, error: 'Unsupported export format' });
+  } catch (error) {
+    console.error('Export batch results error:', error);
+    res.status(500).json({ success: false, error: 'Failed to export results', message: error.message });
+  }
+};
+
+// Attach exportBatchResults to exports
+module.exports.exportBatchResults = exportBatchResults;
+
+/**
+ * Export batch results by query parameter (fallback)
+ * GET /api/batch/export?jobId=<id>&format=csv
+ */
+const exportBatchResultsByQuery = async (req, res) => {
+  try {
+    const jobId = req.query.jobId;
+    if (!jobId) {
+      return res.status(400).json({ success: false, error: 'Missing jobId query parameter' });
+    }
+
+    // Reuse existing function logic by setting req.params.jobId and delegating
+    req.params = req.params || {};
+    req.params.jobId = jobId;
+    return await exportBatchResults(req, res);
+  } catch (error) {
+    console.error('Export by query error:', error);
+    res.status(500).json({ success: false, error: 'Failed to export results', message: error.message });
+  }
+};
+
+module.exports.exportBatchResultsByQuery = exportBatchResultsByQuery;

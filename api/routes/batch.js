@@ -12,6 +12,7 @@ const {
   getBatchJobStatus,
   getUserBatchJobs
 } = require('../controllers/batchController');
+const { exportBatchResults } = require('../controllers/batchController');
 const { authenticate, authorize } = require('../middleware/auth');
 
 // Configure multer for file uploads
@@ -59,6 +60,12 @@ router.post(
   upload.single('file'),
   uploadBatchFile
 );
+
+// GET /api/batch/:jobId/export - Export batch results (csv, excel, pdf)
+router.get('/:jobId/export', authorize('admin', 'loan_officer', 'underwriter'), exportBatchResults);
+
+// Fallback: GET /api/batch/export?jobId=<id>&format=csv
+router.get('/export', authorize('admin', 'loan_officer', 'underwriter'), exportBatchResults);
 
 // GET /api/batch/:jobId - Get batch job status
 router.get('/:jobId', getBatchJobStatus);

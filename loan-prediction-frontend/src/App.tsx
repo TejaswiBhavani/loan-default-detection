@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AppContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/layout/Layout';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import PrivateRoute from './components/common/PrivateRoute';
@@ -26,10 +27,11 @@ const LoadingFallback = () => (
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <div className="App">
-          <Suspense fallback={<LoadingFallback />}>
+    <ThemeProvider>
+      <Router>
+        <AuthProvider>
+          <div className="App">
+            <Suspense fallback={<LoadingFallback />}>
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<Login />} />
@@ -117,6 +119,7 @@ function App() {
         </div>
       </AuthProvider>
     </Router>
+    </ThemeProvider>
   );
 }
 

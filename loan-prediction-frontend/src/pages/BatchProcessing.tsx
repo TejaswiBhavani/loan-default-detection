@@ -12,11 +12,13 @@ import apiService from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import RiskBadge from '../components/common/RiskBadge';
 import Toast from '../components/common/Toast';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 
 interface BatchProcessingState {
   currentJob: BatchJob | null;
   results: BatchResult[];
   isUploading: boolean;
+  isExporting: boolean;
   searchTerm: string;
   filters: {
     status: string;
@@ -29,10 +31,19 @@ interface BatchProcessingState {
 }
 
 const BatchProcessing: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <BatchProcessingContent />
+    </ErrorBoundary>
+  );
+};
+
+const BatchProcessingContent: React.FC = () => {
   const [state, setState] = useState<BatchProcessingState>({
     currentJob: null,
     results: [],
     isUploading: false,
+    isExporting: false,
     searchTerm: '',
     filters: {
       status: 'all',
@@ -59,6 +70,70 @@ const BatchProcessing: React.FC = () => {
 
   const hideToast = () => {
     setToast(prev => ({ ...prev, show: false }));
+  };
+
+  // Download CSV template
+  const downloadTemplate = () => {
+    const headers = [
+      'age', 'income', 'employment_type', 'credit_score', 'debt_to_income',
+      'loan_amount', 'loan_purpose', 'collateral_value'
+    ];
+    const csvContent = headers.join(',') + '\n' +
+      '30,50000,employed,700,0.3,20000,home,25000\n' +
+      '45,75000,self_employed,650,0.4,30000,business,35000';
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'batch_upload_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Export results handler
+  const exportResults = async (format: 'csv' | 'xlsx' | 'pdf') => {
+    if (!state.currentJob) {
+      showToast('error', 'No batch job selected to export');
+      return;
+    }
+
+    if (state.isExporting) {
+      return; // Prevent double-clicks
+    }
+
+    setState(prev => ({ ...prev, isExporting: true }));
+
+    try {
+      showToast('success', `Preparing ${format.toUpperCase()} export...`);
+      
+      // For non-CSV formats, show a message since only CSV is implemented
+      if (format !== 'csv') {
+        showToast('warning', `${format.toUpperCase()} export not yet implemented. Downloading CSV instead.`);
+      }
+      
+      const blob = await apiService.exportBatchResults(state.currentJob.id, 'csv');
+
+      // Create download
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ext = format === 'csv' ? 'csv' : 'csv'; // Always CSV for now
+      a.href = url;
+      a.download = `batch_${state.currentJob.filename || state.currentJob.id}_results.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast('success', `${format.toUpperCase()} export completed successfully!`);
+    } catch (error: any) {
+      console.error('Export error:', error);
+      showToast('error', error?.message || 'Export failed');
+    } finally {
+      setState(prev => ({ ...prev, isExporting: false }));
+    }
   };
 
   // File upload handlers
@@ -99,8 +174,11 @@ const BatchProcessing: React.FC = () => {
   };
 
   const uploadFile = async (file: File) => {
+    console.log('📁 Starting file upload:', file.name, 'Size:', file.size);
+    
     const validationError = validateFile(file);
     if (validationError) {
+      console.error('❌ File validation failed:', validationError);
       showToast('error', validationError);
       return;
     }
@@ -108,9 +186,12 @@ const BatchProcessing: React.FC = () => {
     setState(prev => ({ ...prev, isUploading: true }));
 
     try {
+      console.log('📤 Calling apiService.uploadBatchFile...');
       const response: APIResponse<BatchJob> = await apiService.uploadBatchFile(file);
+      console.log('📨 API Response:', response);
       
       if (response.success && response.data) {
+        console.log('✅ Upload successful, job ID:', response.data.id);
         setState(prev => ({ 
           ...prev, 
           currentJob: response.data!, 
@@ -122,9 +203,11 @@ const BatchProcessing: React.FC = () => {
         // Start polling for job status
         startJobPolling(response.data!.id);
       } else {
+        console.error('❌ API returned error:', response.message);
         throw new Error(response.message || 'Upload failed');
       }
     } catch (error) {
+      console.error('❌ Upload error:', error);
       setState(prev => ({ ...prev, isUploading: false }));
       showToast('error', error instanceof Error ? error.message : 'Upload failed');
     }
@@ -176,48 +259,7 @@ const BatchProcessing: React.FC = () => {
       showToast('error', 'Failed to load results');
     }
   };
-
-  const downloadTemplate = async () => {
-    try {
-      const blob = await apiService.downloadBatchTemplate();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'loan_application_template.csv';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      showToast('success', 'Template downloaded successfully');
-    } catch (error) {
-      showToast('error', 'Failed to download template');
-    }
-  };
-
-  const exportResults = async (format: 'csv' | 'xlsx' | 'pdf') => {
-    if (!state.currentJob) return;
-
-    try {
-      const blob = await apiService.exportData({
-        format,
-        filters: {
-          // Add current filters here if needed
-        }
-      });
-      
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `batch_results_${state.currentJob.id}.${format}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      showToast('success', `Results exported as ${format.toUpperCase()}`);
-    } catch (error) {
-      showToast('error', 'Failed to export results');
-    }
-  };
+  
 
   const filteredResults = state.results.filter(result => {
     const matchesSearch = !state.searchTerm || 
@@ -352,12 +394,12 @@ const BatchProcessing: React.FC = () => {
           <div className="mb-4">
             <div className="flex justify-between text-sm text-gray-600 mb-1">
               <span>Progress</span>
-              <span>{state.currentJob.progress_percentage.toFixed(1)}%</span>
+              <span>{(state.currentJob.progress_percentage || 0).toFixed(1)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${state.currentJob.progress_percentage}%` }}
+                style={{ width: `${state.currentJob.progress_percentage || 0}%` }}
               />
             </div>
           </div>
@@ -387,24 +429,39 @@ const BatchProcessing: React.FC = () => {
             <div className="mt-4 flex space-x-3">
               <button
                 onClick={() => exportResults('csv')}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                disabled={state.isExporting}
+                className={`inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md ${
+                  state.isExporting 
+                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed' 
+                    : 'text-gray-700 bg-white hover:bg-gray-50'
+                }`}
               >
                 <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                Export CSV
+                {state.isExporting ? 'Exporting...' : 'Export CSV'}
               </button>
               <button
                 onClick={() => exportResults('xlsx')}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                disabled={state.isExporting}
+                className={`inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md ${
+                  state.isExporting 
+                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed' 
+                    : 'text-gray-700 bg-white hover:bg-gray-50'
+                }`}
               >
                 <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                Export Excel
+                {state.isExporting ? 'Exporting...' : 'Export Excel'}
               </button>
               <button
                 onClick={() => exportResults('pdf')}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                disabled={state.isExporting}
+                className={`inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md ${
+                  state.isExporting 
+                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed' 
+                    : 'text-gray-700 bg-white hover:bg-gray-50'
+                }`}
               >
                 <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                Export PDF
+                {state.isExporting ? 'Exporting...' : 'Export PDF'}
               </button>
             </div>
           )}
@@ -516,7 +573,7 @@ const BatchProcessing: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {result.prediction ? (
+                      {result.prediction && result.prediction.risk_score != null ? (
                         <div className="font-mono">
                           {(result.prediction.risk_score * 100).toFixed(1)}%
                         </div>
@@ -604,6 +661,8 @@ const BatchProcessing: React.FC = () => {
           </p>
         </div>
       )}
+
+      {/* Debug Info removed for production-like view */}
     </div>
   );
 };

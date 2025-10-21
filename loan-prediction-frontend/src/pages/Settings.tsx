@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
   CogIcon,
   BellIcon,
-  ShieldCheckIcon,
-  UserIcon,
   ChartBarIcon,
   CheckIcon,
 } from '@heroicons/react/24/outline';
 import Toast from '../components/common/Toast';
+import { useTheme, Theme } from '../contexts/ThemeContext';
 
 interface SettingsState {
   riskThresholds: {
@@ -22,7 +21,7 @@ interface SettingsState {
     dailyReports: boolean;
   };
   preferences: {
-    theme: 'light' | 'dark' | 'auto';
+    theme: Theme;
     language: string;
     timezone: string;
     currency: string;
@@ -31,6 +30,7 @@ interface SettingsState {
 }
 
 const Settings: React.FC = () => {
+  const { theme, setTheme, availableThemes } = useTheme();
   const [state, setState] = useState<SettingsState>({
     riskThresholds: {
       low: 0.3,
@@ -44,7 +44,7 @@ const Settings: React.FC = () => {
       dailyReports: false,
     },
     preferences: {
-      theme: 'light',
+      theme: theme,
       language: 'en',
       timezone: 'America/New_York',
       currency: 'USD',
@@ -95,7 +95,10 @@ const Settings: React.FC = () => {
         throw new Error('Medium threshold must be less than high threshold');
       }
 
-      // Save to localStorage (in production, this would save to backend)
+      // Save theme to context (this also persists to localStorage in ThemeContext)
+      setTheme(state.preferences.theme);
+
+      // Save other settings to localStorage
       localStorage.setItem(
         'appSettings',
         JSON.stringify({
@@ -114,6 +117,7 @@ const Settings: React.FC = () => {
   };
 
   const handleResetSettings = () => {
+    const defaultTheme: Theme = 'light';
     setState({
       riskThresholds: {
         low: 0.3,
@@ -127,13 +131,17 @@ const Settings: React.FC = () => {
         dailyReports: false,
       },
       preferences: {
-        theme: 'light',
+        theme: defaultTheme,
         language: 'en',
         timezone: 'America/New_York',
         currency: 'USD',
       },
       saving: false,
     });
+    
+    // Reset theme in context
+    setTheme(defaultTheme);
+    
     localStorage.removeItem('appSettings');
     showToast('success', 'Settings reset to defaults');
   };
@@ -309,23 +317,70 @@ const Settings: React.FC = () => {
           <h2 className="text-lg font-semibold text-gray-900">Preferences</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Theme</label>
-            <select
-              value={state.preferences.theme}
-              onChange={(e) =>
-                setState((prev) => ({
-                  ...prev,
-                  preferences: { ...prev.preferences, theme: e.target.value as any },
-                }))
-              }
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-            >
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-              <option value="auto">Auto</option>
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-4">Theme Selection</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {availableThemes.map((themeOption) => (
+                <div
+                  key={themeOption.value}
+                  className={`relative p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                    theme === themeOption.value
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => {
+                    setTheme(themeOption.value);
+                    setState((prev) => ({
+                      ...prev,
+                      preferences: { ...prev.preferences, theme: themeOption.value },
+                    }));
+                  }}
+                >
+                  {theme === themeOption.value && (
+                    <div className="absolute top-2 right-2">
+                      <CheckIcon className="w-5 h-5 text-blue-500" />
+                    </div>
+                  )}
+                  
+                  <div className="mb-3">
+                    <h3 className="font-medium text-gray-900">{themeOption.label}</h3>
+                  </div>
+                  
+                  {/* Color preview */}
+                  <div className="flex space-x-2 mb-3">
+                    {themeOption.colors.map((color, index) => (
+                      <div
+                        key={index}
+                        className="w-6 h-6 rounded-full border border-gray-200"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                  
+                  {/* Mini preview card */}
+                  <div 
+                    className="text-xs rounded p-2 border"
+                    style={{
+                      backgroundColor: themeOption.colors[0],
+                      borderColor: themeOption.colors[2],
+                      color: themeOption.value === 'dark' ? '#f7fafc' : '#1a202c'
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Sample Card</span>
+                      <div 
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: themeOption.colors[3] }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-sm text-gray-500">
+              Changes are applied immediately and saved when you click "Save Settings"
+            </p>
           </div>
 
           <div>

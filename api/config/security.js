@@ -78,10 +78,18 @@ const helmetConfig = {
  */
 const getCorsConfig = () => {
   const allowedOrigins = [
-    // Development
-    'https://probable-space-broccoli-jj456v5xx4p4c5x9j-3000.app.github.dev',
+    // Development - localhost
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    
+    // GitHub Codespaces - dynamic pattern matching
+    ...(process.env.CODESPACE_NAME ? [
+      `https://${process.env.CODESPACE_NAME}-3000.app.github.dev`,
+      `https://${process.env.CODESPACE_NAME}-3000.preview.app.github.dev`
+    ] : []),
+    
+    // Specific Codespace (fallback)
+    'https://probable-space-broccoli-jj456v5xx4p4c5x9j-3000.app.github.dev',
     
     // Production (replace with actual domains)
     process.env.FRONTEND_URL,
@@ -100,15 +108,21 @@ const getCorsConfig = () => {
         return callback(null, true);
       }
 
+      // Check for GitHub Codespaces pattern
+      if (origin && origin.includes('.app.github.dev')) {
+        return callback(null, true);
+      }
+
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.log('CORS rejected origin:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
     exposedHeaders: ['Content-Range', 'X-Content-Range', 'X-Total-Count'],
     maxAge: 600, // 10 minutes
     preflightContinue: false,
