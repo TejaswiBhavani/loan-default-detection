@@ -288,7 +288,7 @@ const startServer = async () => {
     console.log('✅ Database connected successfully\n');
 
     // Start Express server
-    const server = app.listen(PORT, () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log('');
       console.log('═══════════════════════════════════════════════════════════');
       console.log('  🏦  Loan Default Prediction API Server');
