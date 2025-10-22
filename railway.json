@@ -1,0 +1,10 @@
+{
+  "build": {
+    "commands": [
+      "cd api && npm install"
+    ]
+  },
+  "start": {
+    "command": "cd api && npm start"
+  }
+}
