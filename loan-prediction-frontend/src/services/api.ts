@@ -13,7 +13,7 @@ import {
 } from '../types';
 
 // API Configuration - Use relative path for proxy routing
-const API_BASE_URL = '/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 class APIService {
   private api: AxiosInstance;
