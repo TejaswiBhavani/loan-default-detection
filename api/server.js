@@ -160,31 +160,34 @@ app.use('/api/', generalLimiter);
 // ROUTES
 // ============================================================================
 
+// Root endpoint for Railway health checks
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    service: 'Loan Default Prediction API',
+    version: '1.0.0',
+    status: 'healthy',
+    endpoints: {
+      health: '/health',
+      api: '/api'
+    }
+  });
+});
+
 // Health check endpoint (no rate limit)
 app.get('/health', (req, res) => {
+  const healthStatus = getHealthStatus();
   res.json({
     success: true,
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    ...healthStatus,
   });
 });
 
 // Apply specialized rate limiters to high-risk routes
 app.use('/api/auth', authLimiter);
-
-// ============================================================================
-// PUBLIC ENDPOINTS (No rate limiting)
-// ============================================================================
-
-// Health check endpoint with metrics
-app.get('/health', (req, res) => {
-  const healthStatus = getHealthStatus();
-  res.json({
-    success: true,
-    ...healthStatus,
-  });
-});
 
 // Security configuration endpoint (development only)
 if (!isProduction()) {

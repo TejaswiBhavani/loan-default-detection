@@ -1,4 +1,15 @@
 {
+  "name": "loan-default-detection-railway",
+  "version": "1.0.0", 
+  "description": "Railway deployment wrapper for loan default detection API",
+  "main": "api/server.js",
+  "scripts": {
+    "start": "cd api && node server.js",
+    "postinstall": "cd api && npm install --production"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
