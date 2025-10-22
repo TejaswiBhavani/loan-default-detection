@@ -77,24 +77,23 @@ const helmetConfig = {
  * Configure Cross-Origin Resource Sharing
  */
 const getCorsConfig = () => {
-  const allowedOrigins = [
-    // Development - localhost
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    
-    // GitHub Codespaces - dynamic pattern matching
-    ...(process.env.CODESPACE_NAME ? [
-      `https://${process.env.CODESPACE_NAME}-3000.app.github.dev`,
-      `https://${process.env.CODESPACE_NAME}-3000.preview.app.github.dev`
-    ] : []),
-    
-    // Specific Codespace (fallback)
-    'https://probable-space-broccoli-jj456v5xx4p4c5x9j-3000.app.github.dev',
-    
-    // Production (replace with actual domains)
-    process.env.FRONTEND_URL,
-    'https://app.loanpredict.com'
-  ].filter(Boolean); // Remove undefined values
+  // Use CORS_ORIGIN env variable if set, otherwise fallback to hardcoded list
+  let allowedOrigins = [];
+  if (process.env.CORS_ORIGIN) {
+    allowedOrigins = process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean);
+  } else {
+    allowedOrigins = [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      ...(process.env.CODESPACE_NAME ? [
+        `https://${process.env.CODESPACE_NAME}-3000.app.github.dev`,
+        `https://${process.env.CODESPACE_NAME}-3000.preview.app.github.dev`
+      ] : []),
+      'https://probable-space-broccoli-jj456v5xx4p4c5x9j-3000.app.github.dev',
+      process.env.FRONTEND_URL,
+      'https://app.loanpredict.com'
+    ].filter(Boolean);
+  }
 
   return {
     origin: (origin, callback) => {
