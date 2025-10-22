@@ -1,10 +1,13 @@
 # Loan Default Prediction System
 
+<img width="1024" height="1024" alt="logo-7" src="https://github.com/user-attachments/assets/7369b006-d79d-4e22-b08a-2971b759f8a1" />
+
 A streamlined machine learning application for predicting loan default risk using an advanced ensemble model.
 
 ## Overview
 
 This system provides **high-accuracy loan default prediction** with a clean, intuitive interface:
+
 - **89%+ Accuracy** using advanced ML ensemble methods
 - **Real-time Predictions** via interactive Streamlit dashboard
 - **Batch Processing** for multiple loan applications
