@@ -8,7 +8,7 @@ A streamlined machine learning application for predicting loan default risk usin
 
 This system provides **high-accuracy loan default prediction** with a clean, intuitive interface:
 
-- **89%+ Accuracy** using advanced ML ensemble methods
+- **91.12 Accuracy** using advanced ML ensemble methods
 - **Real-time Predictions** via interactive Streamlit dashboard
 - **Batch Processing** for multiple loan applications
 - **Risk Visualization** with detailed decision factors
